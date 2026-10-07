@@ -790,6 +790,13 @@ check("Wstecz na polu ustawien konczy pisanie, a nie zamyka ustawien",
 check("pole w instrukcji opisuje nowe strzalki",
   html.indexOf('data-i18n="help_nav_fields"') > 0 && src.indexOf("help_nav_fields:") > 0);
 
+/* Gwiazdka ulubionych to osobny przycisk w kafelku kanalu. Krotkie OK musi
+   przelaczyc ulubione, a nie wlaczyc kanal: focusedChannelCard() obejmuje caly
+   kafelek (closest(".channel")), wiec bez wyjatku na gwiazdke OK ja pomijalo. */
+check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
+  src.indexOf("okFocus.classList.contains(\"favorite-button\")") > 0 &&
+  src.indexOf("startOkHold(function () { okFocus.click(); });") > 0);
+
 (function () {
   const at = src.indexOf("function backLeavesField() {");
   const stop = src.indexOf("/* Jedna wspólna obsługa „Wstecz”");
@@ -1007,6 +1014,17 @@ check("lista pokazuje takze to, co dopiero bedzie (12 godzin w przod)",
   src.indexOf("var until = fromPlayer ? now + ARCHIVE_AHEAD : now;") > 0);
 check("program, ktory leci teraz, ma podpis LIVE",
   src.indexOf('live.className = "guide-live"') > 0 && src.indexOf('live.textContent = t("live")') > 0);
+/* Krotki program na osi (waski kafelek) ma pokazac nazwe: plakietka LIVE /
+   ODTWARZANE brala cale miejsce i tytul zostawal samym wielokropkiem. */
+check("EPG: krotki program na osi pokazuje nazwe, a plakietke pomija",
+  src.indexOf("var wide = width >= GUIDE_PILL_MIN_W;") > 0 &&
+  src.indexOf('if (!wide) block.classList.add("narrow");') > 0 &&
+  css.indexOf(".guide-program.narrow { padding: 9px 8px; }") > 0);
+/* Lista programow: podpis LIVE / ODTWARZANE w tej samej linii co nazwa, po
+   myslniku („Straznik Teksasu - LIVE”), a nie w osobnej linii pod nia. */
+check("lista programow: podpis LIVE/ODTWARZANE w linii nazwy po myslniku",
+  src.indexOf('row.appendChild(document.createTextNode(" - "));') > 0 &&
+  css.indexOf(".program .program-title-row .program-title { display: inline") > 0);
 check("program, ktory dopiero bedzie, widac, ale nie da sie go wybrac",
   src.indexOf('note.textContent = t("epg_list_future")') > 0 &&
   src.indexOf("button.disabled = true;") > 0 && css.indexOf(".program.future {") > 0);
