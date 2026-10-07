@@ -24,6 +24,24 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.16] — 2026-10-07
+
+### Zmieniono
+- **Lista programów czyta się w trzech liniach** — data z rokiem, godzina od–do i dopiero pod nimi nazwa programu z podpisem LIVE / ODTWARZANE (wcześniej data i godzina stały sklejone, „07.10 11:00–12:00”, i wyglądały jak jedna liczba).
+- **Pilot w programie TV steruje samym podświetleniem** — ◀ ▶ przechodzą po programach tego samego kanału (także po tych, które dopiero będą), a ▲ ▼ o jeden kanał wyżej albo niżej, na program z tego samego momentu.
+- **Oś czasu w programie TV dosuwa się razem z podświetleniem** — godziny ruszają się tylko wtedy, gdy podświetlonego programu nie widać w całości, więc strzałki nie przewijają osi same z siebie.
+
+### Dodano
+- **Nazwa programu pod podświetleniem stoi nad siatką** — podpis pokazuje pełną nazwę i godziny tego, na czym stoi pilot, więc program widać nawet wtedy, gdy krótki wpis na osi ucina tytuł wielokropkiem.
+- **Instrukcja opisuje nowe ruchy w programie TV i liście programów** — wiersz o strzałkach mówi, że ▲ ▼ przechodzą na kanał wyżej albo niżej, na program z tego samego momentu, podpis nad siatką pokazuje nazwę podświetlonego programu, a lista programów z paska odtwarzacza staje na tym, co leci teraz.
+
+### Poprawiono
+- **◀ ▶ w programie TV idą w stronę, którą pokazuje pilot** — sąsiada na osi wybieramy po godzinie programu, a nie po kolejności kafelków, więc „w lewo” nie przechodzi już w prawo i podświetlenie nie „odnajduje się” dopiero na skraju zakresu.
+- **Program pod podświetleniem zostaje widoczny w całości** — oś czasu nie wystaje już za prawą krawędź na ekranie, który nie mieści trzech godzin, a widok zostaje na początku osi, więc żaden program (ani jego nazwa) nie ląduje poza ekranem.
+- **„EPG” w odtwarzaczu staje od razu na programie, który leci teraz** — lista programów kanału dostaje fokus na programie bieżącym, a nie na wpisach z przyszłości, które stoją na górze listy.
+- **Z pola linku EPG wychodzi się pilotem** — ▼ na polu przenosi fokus na wiersz pod nim, a nie na pasek zakładek na górze karty, do którego ekran zjeżdżał razem z widokiem.
+- **Wstecz na polu ustawień zostaje w wierszu obok** — fokus przechodzi na sąsiedni wiersz zamiast na pasek zakładek, więc pole linku EPG nie wypada z ekranu.
+
 ## [2.1.15] — 2026-10-07
 
 ### Poprawiono

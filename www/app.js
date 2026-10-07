@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.15";
+  var APP_VERSION = "2.1.16";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -66,6 +66,13 @@
   var GUIDE_MIN_HOURS = 3;
   var GUIDE_MAX_HOURS = 6;
   var GUIDE_HOUR_MIN_W = 300;
+  /* Ekran, który nie mieści nawet trzech godzin po GUIDE_HOUR_MIN_W (telefon
+     w poziomie, mały dekoder), nie może dostać osi szerszej niż widok: siatka
+     przewija się tylko w pionie, więc wystający kawałek osi był po prostu
+     ucięty — razem z podświetlonym programem, który na nim leżał. Godzina jest
+     wtedy węższa (tyle, ile zostaje miejsca), ale nigdy węższa niż
+     GUIDE_HOUR_FIT_W — patrz guideHourWidth. */
+  var GUIDE_HOUR_FIT_W = 120;
   /* Szerokość kolumny z nazwami kanałów w programie TV — tyle samo co
      w styles.css (.guide-channel i .guide-corner). Potrzebna, żeby linia
      bieżącej godziny wypadła dokładnie na początku osi czasu, także wtedy, gdy
@@ -266,9 +273,11 @@
     channel: null,
     fromPlayer: false,
     returnTo: "browserScreen",
-    /* wpis listy, który jest odtwarzany teraz — lista otwarta z paska „EPG”
-       staje na nim fokusem (patrz programEntry, openArchive) */
-    playingButton: null
+    /* Dwa wpisy, na których lista otwarta z paska „EPG” staje fokusem: materiał
+       odtwarzany teraz (nagranie z archiwum) i program, który leci na żywo.
+       Wybiera je programEntry, a używa openArchive. */
+    playingButton: null,
+    liveButton: null
   };
 
   var DEFAULTS = {
@@ -363,6 +372,9 @@
     search: "Szukaj", refresh: "Odśwież", guide_title: "Program TV", guide_prev_day: "‹ Dzień",
     guide_next_day: "Dzień ›", guide_yesterday: "Wczoraj", guide_day_before: "Przedwczoraj", today: "Dziś", date: "Data", time: "Godzina",
     guide_pan_hint: "◀ ▶ — programy • ▲ ▼ — kanały",
+    /* podpis podświetlonego programu nad siatką — pełna nazwa i godziny,
+       także gdy wąski kafelek ucina tytuł (patrz guideFocusNote) */
+    guide_focus_name: "{from}–{to} • {title}",
     back: "Wstecz", live: "LIVE", catchup: "CATCH-UP", archive: "Archiwum",
     program_playing: "ODTWARZANE",
     loading: "Pobieranie…", all: "Wszystkie", favorites: "★ Ulubione", recent: "Ostatnio oglądane",
@@ -621,11 +633,11 @@
     help_nav_back: "Zamyka nakładkę albo wraca o ekran wstecz. W polu ustawień kończy najpierw pisanie (zamyka klawiaturę ekranową), a na liście kanałów pyta, czy wyjść z aplikacji.",
     help_epg: "PROGRAM TV (EPG)",
     help_epg_grid: "Przycisk „EPG” w nagłówku otwiera siatkę wszystkich kanałów na osi czasu. Program, który leci teraz, ma podpis LIVE, a pionowa linia pokazuje bieżącą godzinę.",
-    help_epg_pan: "◀ ▶ chodzą po programach tego samego kanału, a gdy programy się skończą — po osi czasu, dowolnie daleko w obie strony. ▲ ▼ chodzą po kanałach, a z górnego wiersza ▲ wraca do przycisków dnia.",
+    help_epg_pan: "◀ ▶ chodzą po programach tego samego kanału, a ▲ ▼ przechodzą na kanał wyżej albo niżej — na program z tego samego momentu. Oś czasu dosuwa się razem z podświetleniem, a z górnego wiersza ▲ wraca do przycisków dnia. Nazwę i godziny programu pod podświetleniem pokazuje podpis nad siatką.",
     help_epg_days: "Skok o dzień wstecz albo w przód; obok są pola daty i godziny do wskazania dokładnej chwili.",
     help_epg_pick: "Zakończony program włącza się z archiwum, a ten, który leci teraz — na żywo.",
     help_catchup: "ARCHIWUM I CATCH-UP",
-    help_catchup_list: "Przycisk „EPG” na pasku odtwarzacza otwiera listę programów oglądanego kanału: poprzednie, bieżący i następne. Wybierz pozycję i naciśnij OK, żeby odtworzyć ją z archiwum.",
+    help_catchup_list: "Przycisk „EPG” na pasku odtwarzacza otwiera listę programów oglądanego kanału: poprzednie, bieżący i następne. Lista staje na programie, który leci teraz, a wybraną pozycję odtwarza się z archiwum po naciśnięciu OK.",
     help_catchup_live: "Przycisk „Na żywo” (na pasku odtwarzacza albo nad listą programów) wraca do bieżącej chwili.",
     help_catchup_days: "Ile dni wstecz sięga archiwum, ustawia „Dni EPG/archiwum wstecz” w zakładce „Ogólne”, a wielkość skoku — „Krok przewijania archiwum”.",
     help_catchup_note: "Kanał bez archiwum pokaże komunikat zamiast obrazu, a kanał bez EPG dostaje nagrania godzinowe — dzięki temu archiwum zostaje użyteczne.",
@@ -675,6 +687,8 @@
     search: "Search", refresh: "Refresh", guide_title: "TV Guide", guide_prev_day: "‹ Day",
     guide_next_day: "Day ›", guide_yesterday: "Yesterday", guide_day_before: "2 days ago", today: "Today", date: "Date", time: "Time",
     guide_pan_hint: "◀ ▶ — programmes • ▲ ▼ — channels",
+    /* highlighted programme above the grid — see guideFocusNote */
+    guide_focus_name: "{from}–{to} • {title}",
     back: "Back", live: "LIVE", catchup: "CATCH-UP", archive: "Archive",
     program_playing: "PLAYING",
     loading: "Loading…", all: "All", favorites: "★ Favorites", recent: "Recently watched",
@@ -929,11 +943,11 @@
     help_nav_back: "Closes an overlay or goes one screen back. In a settings field it first finishes typing (closes the on-screen keyboard); on the channel list it asks whether to quit the app.",
     help_epg: "TV GUIDE (EPG)",
     help_epg_grid: "The “EPG” button in the header opens a grid of all channels on a time axis. The programme on air carries a LIVE tag and the vertical line marks the current time.",
-    help_epg_pan: "The ◀ ▶ arrows step through the programmes of the same channel, and shift the time axis once they run out — as far back or forward as you like. ▲ ▼ walk through the channels, and ▲ from the top row returns to the day buttons.",
+    help_epg_pan: "The ◀ ▶ arrows step through the programmes of the same channel, and ▲ ▼ move to the channel above or below — onto the programme at the same moment. The time axis follows the highlight, and ▲ from the top row returns to the day buttons. The name and the times of the highlighted programme are shown above the grid.",
     help_epg_days: "Jumps a day back or forward; the date and time fields next to it jump to an exact moment.",
     help_epg_pick: "A finished programme plays from the archive, the one on air goes live.",
     help_catchup: "ARCHIVE AND CATCH-UP",
-    help_catchup_list: "The “EPG” button on the player bar opens the programme list of the channel you watch: previous, current and next. Pick one and press OK to play it from the archive.",
+    help_catchup_list: "The “EPG” button on the player bar opens the programme list of the channel you watch: previous, current and next. The list stops on the programme on air; pick a position and press OK to play it from the archive.",
     help_catchup_live: "The “Live” button (on the player bar or above the programme list) returns to the current moment.",
     help_catchup_days: "How many days back the archive goes is set by “EPG/archive days back” in the “General” tab, and the jump size by “Archive seek step”.",
     help_catchup_note: "A channel without archive shows a message instead of the picture, and a channel without EPG gets hourly recordings — so the archive stays useful.",
@@ -3397,11 +3411,29 @@
 
   /* ==============================  ARCHIWUM  ============================== */
 
+  /* zakres w jednej linii — pasek odtwarzacza pokazuje tak nagranie z archiwum */
   function formatRange(start, end) {
     var from = new Date(start);
     var to = new Date(end);
     return pad2(from.getDate()) + "." + pad2(from.getMonth() + 1) + " " +
       pad2(from.getHours()) + ":" + pad2(from.getMinutes()) + "–" +
+      pad2(to.getHours()) + ":" + pad2(to.getMinutes());
+  }
+
+  /* Dzień z rokiem dla listy programów. Lista sięga kilka dni (a przy „dniach
+     EPG wstecz” także przez granicę roku), więc data bez roku myliła dni:
+     „07.10” nic nie mówiło o tym, czy program był wczoraj, czy rok temu. */
+  function formatDay(ms) {
+    var day = new Date(ms);
+    return pad2(day.getDate()) + "." + pad2(day.getMonth() + 1) + "." + day.getFullYear();
+  }
+
+  /* Sama godzina od–do: data stoi wiersz wyżej (patrz programEntry), więc
+     w jednej linii została tylko ta część, którą naprawdę wybiera się pilotem. */
+  function formatClock(start, end) {
+    var from = new Date(start);
+    var to = new Date(end);
+    return pad2(from.getHours()) + ":" + pad2(from.getMinutes()) + "–" +
       pad2(to.getHours()) + ":" + pad2(to.getMinutes());
   }
 
@@ -3420,6 +3452,7 @@
     archive.channel = channel;
     archive.fromPlayer = fromPlayer;
     archive.playingButton = null;
+    archive.liveButton = null;
     /* „Wstecz” wraca do obrazu tylko wtedy, gdy coś tam jeszcze leci —
        pilnuje tego closeArchive() */
     archive.returnTo = fromPlayer ? "playerScreen" : "browserScreen";
@@ -3467,16 +3500,20 @@
 
     showScreen("archiveScreen");
 
-    /* Lista otwarta z odtwarzacza staje na materiale, który leci: fokus (i widok)
-       idą na niego, żeby od razu było widać, co jest odtwarzane — a nie tylko
-       najnowsze nagranie na górze listy. showScreen ustawia fokus po 30 ms,
-       dlatego ten krok musi być późniejszy. */
-    var playing = archive.playingButton;
-    if (fromPlayer && playing) {
+    /* Lista otwarta z paska „EPG” staje na tym, co leci: fokus (i widok) idą na
+       program bieżący, żeby od razu było widać kanał, na którym jesteśmy —
+       bez tego lista pokazywała początek (a więc programy z przyszłości, bo
+       najnowszy start jest na górze), a podświetlenie wchodziło w program LIVE
+       dopiero po ▼. Gdy kanał nie ma teraz żadnego programu (brak EPG), ekran
+       staje na pierwszym wpisie, który da się wybrać — pilnuje tego
+       entryFocusTarget w showScreen. showScreen ustawia fokus po 30 ms, dlatego
+       ten krok musi być późniejszy. */
+    var live = archive.playingButton || archive.liveButton;
+    if (fromPlayer && live) {
       window.setTimeout(function () {
-        if (!playing.parentNode) return;
-        try { playing.focus(); } catch (error) { return; }
-        keepInView(playing);
+        if (!live.parentNode) return;
+        try { live.focus(); } catch (error) { return; }
+        keepInView(live);
       }, 60);
     }
   }
@@ -3504,8 +3541,16 @@
       (watching ? " playing" : "");
     button.tabIndex = 0;
 
+    /* Trzy linie, każda z tym, czego szuka pilot: pełna data (z rokiem), godzina
+       od–do i dopiero pod nimi nazwa programu z podpisem LIVE / ODTWARZANE.
+       Wcześniej data i godzina stały sklejone w jednej linii („07.10 11:00–12:00”)
+       i na telewizorze wyglądały jak jedna liczba. */
     var time = document.createElement("time");
-    time.textContent = formatRange(program.start, program.end);
+    var day = document.createElement("b");
+    day.className = "program-date";
+    day.textContent = formatDay(program.start);
+    time.appendChild(day);
+    time.appendChild(document.createTextNode(formatClock(program.start, program.end)));
     button.appendChild(time);
 
     var row = document.createElement("span");
@@ -3528,6 +3573,9 @@
       live.className = "guide-live";
       live.textContent = t("live");
       row.appendChild(live);
+      /* program bieżący — na nim staje fokus, gdy lista otwiera się z paska
+         „EPG” w odtwarzaczu (patrz openArchive) */
+      archive.liveButton = button;
     }
     button.appendChild(row);
 
@@ -7025,9 +7073,14 @@
 
     /* Zapas wokół sfokusowanego elementu (mniejszy na wąskim ekranie). */
     var view = parent.getBoundingClientRect();
+    var box = element.getBoundingClientRect();
+    /* Ekran w trakcie przebudowy (klawiatura ekranowa zmienia wysokość okna,
+       dopiero pokazany ekran nie ma jeszcze układu) potrafi zwrócić zerowy
+       prostokąt. Wtedy lepiej nie ruszyć ekranu niż policzyć z niego skok
+       przez całą kartę ustawień. */
+    if (view.height <= 0 || view.width <= 0 || (!box.width && !box.height)) return;
     var marginY = Math.max(80, Math.min(200, Math.round(view.height * 0.25)));
     var marginX = Math.max(40, Math.min(120, Math.round(view.width * 0.08)));
-    var box = element.getBoundingClientRect();
     var down = 0;
     var across = 0;
 
@@ -7038,9 +7091,13 @@
     else if (box.left - marginX < view.left) across = box.left - marginX - view.left;
 
     /* Przeglądarka sama przycina przewijanie do zakresu, więc ostatni element
-       formularza nadal da się pokazać — tyle że nie przy samej krawędzi. */
-    if (down) parent.scrollTop += down;
-    if (across) parent.scrollLeft += across;
+       formularza nadal da się pokazać — tyle że nie przy samej krawędzi.
+       Jeden krok pilota dosuwa tylko sąsiedni wiersz, więc większy skok zawsze
+       znaczy błąd pomiaru (nieaktualny albo zerowy prostokąt) — zjazd na koniec
+       długiego formularza, dokładnie tam, gdzie stoją „Zapisz i pobierz”
+       i „Wstecz”. Dlatego przycinamy go do jednego ekranu. */
+    if (down) parent.scrollTop += Math.max(-view.height, Math.min(view.height, down));
+    if (across) parent.scrollLeft += Math.max(-view.width, Math.min(view.width, across));
 
     /* Zapamiętane miejsce fokusu musi być aktualne po dosunięciu ekranu. */
     if ((down || across) && focusAnchor && focusAnchor.el === element) {
@@ -7058,17 +7115,24 @@
     }
     if (!candidates.length) return false;
 
-    /* Punkt odniesienia: sfokusowany element. Gdy fokus zniknął, bo przycisk
-       został wyłączony albo ukryty (tak działo się z „Pobierz i zainstaluj”
-       po ruszeniu pobierania), liczymy od jego ostatniego miejsca na ekranie —
-       inaczej nawigacja wracała na sam początek ustawień i nie było jak
-       zjechać do opisu zmian ani do „Zapisz i pobierz”. */
+    /* Punkt odniesienia: sfokusowany element. Gdy fokus zniknął — bo przycisk
+       został wyłączony w trakcie pobierania paczki, a na webOS klawiatura
+       ekranowa oddaje go ciału strony po zamknięciu — liczymy od miejsca,
+       w którym stał. Inaczej nawigacja wracała na sam początek ustawień:
+       bez punktu odniesienia ▼ z pola linku EPG brało pierwszy element
+       dokumentu, czyli pasek zakładek na górze długiej karty, więc
+       podświetlenie wyskakiwało poza wiersz, z którego przyszło.
+       Elementowi wciąż obecnemu w układzie bierzemy bieżący prostokąt (ekran
+       mógł się w międzyczasie przewinąć), a dopiero gdy zniknął — zapamiętany
+       (patrz focusAnchor). */
     var box = null;
     if (current && candidates.indexOf(current) >= 0) {
       box = current.getBoundingClientRect();
-    } else if (focusAnchor && focusAnchor.el && focusAnchor.el.parentNode &&
-               (focusAnchor.el.disabled || focusAnchor.el.offsetParent === null)) {
-      box = focusAnchor.box;
+    } else if (focusAnchor && focusAnchor.el && focusAnchor.el.parentNode) {
+      box = (focusAnchor.el.offsetParent !== null &&
+             typeof focusAnchor.el.getBoundingClientRect === "function")
+        ? focusAnchor.el.getBoundingClientRect()
+        : focusAnchor.box;
     }
 
     if (!box || (!box.width && !box.height)) {
@@ -7181,16 +7245,24 @@
     var all = screen.querySelectorAll('[tabindex="0"],button,input,select');
     for (var i = 0; i < all.length; i++) {
       if (all[i].offsetParent === null) continue;
+      /* Wyłączony przycisk nie przyjmie fokusu, więc wybranie go na cel
+         zostawiłoby ekran bez podświetlenia (tak lista programów kanału
+         otwierała się na zablokowanym wpisie z przyszłości — patrz
+         openArchive). */
+      if (all[i].disabled) continue;
       if (isTextField(all[i])) continue;
       return all[i];
     }
     return null;
   }
 
-  /* Ruch pilotem po siatce EPG: ▲ / ▼ przeskakują do najbliższego programu w
-     sąsiednim wierszu (kanale) — fokus trzyma się kolumny czasu. ◀ / ▶ nadal
-     przewijają całą oś, a OK uruchamia program albo catch-up. Z górnego wiersza
-     ▲ wraca do przycisków dnia, żeby pilotem dało się dojść do „Dziś”. */
+  /* Ruch pilotem po siatce EPG — sterujemy wyłącznie podświetleniem:
+     ▲ ▼ przenoszą je o jeden kanał (wiersz) w górę albo w dół, na program
+     z tego samego momentu, a ◀ ▶ o jeden program w bok (patrz guideStepProgram).
+     Oś czasu rusza się tylko wtedy, gdy podświetlony program nie mieści się już
+     w widocznym zakresie, więc to podświetlenie prowadzi przesuwanie godzin.
+     Z górnego wiersza ▲ wraca do przycisków dnia, żeby pilotem dało się dojść
+     do „Dziś”. */
   function focusGuide(keyCode) {
     var grid = $("guideGrid");
     if (!grid) return;
@@ -7209,40 +7281,44 @@
       return;
     }
 
-    var blocks = grid.querySelectorAll(".guide-program");
-    var box = current.getBoundingClientRect();
-    var cx = box.left + box.width / 2;
-    var cy = box.top + box.height / 2;
-    var best = null;
-    var bestScore = Infinity;
-
-    for (var i = 0; i < blocks.length; i++) {
-      var block = blocks[i];
-      if (block === current || block.disabled) continue;
-      var rect = block.getBoundingClientRect();
-      var ry = rect.top + rect.height / 2;
-      var forward = keyCode === 38 ? cy - ry : ry - cy;
-      if (forward <= 2) continue;
-      var lateral = Math.abs(cx - (rect.left + rect.width / 2));
-      var score = forward + 2.5 * lateral;
-      if (score < bestScore) {
-        bestScore = score;
-        best = block;
-      }
-    }
-
-    if (best) {
-      focusKeepScroll(best);
-      /* Dosuwamy siatkę tylko o brakujący kawałek. scrollIntoView(false)
-         wyrównywał kafelek do samego dołu, więc każde ▲ ▼ robiło duży,
-         nierówny skok, a kafelek przy górnej krawędzi chował się pod
-         przyklejoną osią czasu. revealGuideBlock() dokłada też wiersze
-         przy dolnej krawędzi widoku. */
-      revealGuideBlock(best);
+    var index = guideFocusRowIndex();
+    if (index < 0) return;
+    var moved = guideStepRow(index, keyCode === 38 ? -1 : 1, guideFocusTime());
+    if (moved) {
+      /* Fokus kładziemy z preventScroll (przewijanie siatki robimy sami, żeby
+         silnik nie uciekał z widokiem w poziomie), dlatego nowy wiersz trzeba
+         dosunąć do widoku — inaczej podświetlenie schowałoby się pod
+         przyklejoną osią czasu albo za dolną krawędzią. */
+      revealGuideBlock(moved);
       return;
     }
     /* nad górnym wierszem nie ma już programu: ▲ wraca do nagłówka */
     if (keyCode === 38) focusGuideHeader();
+  }
+
+  /* Wiersz (kanał) o jedno miejsce wyżej albo niżej — na program z tego samego
+     momentu, żeby podświetlenie nie uciekało w bok po osi czasu. Kanały bez
+     programu w tym momencie przeskakujemy (pusty wiersz zatrzymałby pilota),
+     a wiersze poniżej widoku dorysowujemy (patrz guideEnsureRow). Zwraca kafelek
+     z podświetleniem (albo null, gdy nie było na czym stanąć). */
+  function guideStepRow(index, dir, time) {
+    for (var i = index + dir; i >= 0 && i < guide.items.length; i += dir) {
+      if (!guideEnsureRow(i)) break;
+      var block = focusGuideRowBlock(i, time, 0);
+      if (block) return block;
+    }
+    return null;
+  }
+
+  /* Czy wiersz o tym numerze jest już w DOM? Lista kanałów rysowana jest
+     porcjami (patrz renderGuide), więc wiersze poniżej widoku trzeba najpierw
+     dorysować — inaczej nie byłoby na czym położyć fokusu. */
+  function guideEnsureRow(index) {
+    var wrap = $("guideRows");
+    if (!wrap) return false;
+    var need = index - (guide.winStart + guide.rendered - 1);
+    if (need > 0) guideFill(need);
+    return index >= guide.winStart && index < guide.winStart + guide.rendered;
   }
 
   /* wyjście z siatki do nagłówka programu TV (▲ z górnego wiersza) */
@@ -7358,16 +7434,11 @@
     guideSetWindow(next - (next % 3600000));
   }
 
-  /* Programy w wierszu, które da się wybrać pilotem. Kafelki z przyszłości
-     i te bez archiwum są zablokowane (patrz buildGuideProgram), dlatego ◀ ▶
-     muszą je przeskakiwać — inaczej zatrzymałyby się na czymś, czego nie da
-     się włączyć. */
-  function guideEnabledBlocks(row) {
-    return row ? row.querySelectorAll(".guide-program:not([disabled])") : [];
-  }
-
   /* Sąsiedni program tego samego kanału z danych EPG: dir > 0 w przód, inaczej
-     w tył. Lista programów jest posortowana, więc wystarczy jedno przejście. */
+     w tył. Programy trzymamy posortowane od najnowszego (parseXmltv), więc
+     kolejności tej listy nie zakładamy — szukamy najbliższego na osi. Programu,
+     którego nie da się włączyć (przyszłość albo miniony bez archiwum), nie
+     bierzemy, bo pilot nie miałby na czym stanąć (patrz buildGuideProgram). */
   function guideNeighbourProgram(channel, time, dir) {
     var list = programsFor(channel);
     var now = Date.now();
@@ -7375,21 +7446,41 @@
     var found = null;
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
-      if (p.start > now) break;                    /* dalej są już tylko przyszłe */
-      if (p.end <= now && !canCatchup) continue;   /* minęło, a archiwum nie ma */
+      if (!isFinite(p.start) || !isFinite(p.end) || p.end <= p.start) continue;
+      if (p.start > now) continue;                  /* jeszcze nie było */
+      if (p.end <= now && !canCatchup) continue;    /* minęło, a archiwum nie ma */
       if (dir > 0) {
-        if (p.start >= time) return p;
-      } else if (p.end <= time) {
-        found = p;                                 /* ostatni przed tym momentem */
+        if (p.start < time) continue;
+        if (!found || p.start < found.start) found = p;
+      } else {
+        if (p.end > time) continue;
+        if (!found || p.end > found.end) found = p;
       }
     }
     return found;
   }
 
-  /* ◀ ▶ chodzą po programach tego samego kanału. Gdy sąsiedniego programu nie
-     ma już na osi, widok dosuwa się tak, żeby ten program było widać — godzina
-     (dzień) zmienia się więc dopiero na skraju widocznego zakresu, a nie przy
-     każdym naciśnięciu strzałki. ▲ ▼ nadal chodzą po kanałach. */
+  /* Kafelki jednego wiersza po kolei na osi czasu (od najstarszego). Programy
+     trzymamy posortowane od najnowszego (parseXmltv), więc kafelek „obok”
+     w DOM leży na osi po przeciwnej stronie, niż wskazuje strzałka: ◀ szło
+     w prawo, a ▶ w lewo i dopiero na skraju okna pilot „znajdował się” po
+     drugiej stronie. Dlatego sąsiada bierzemy po czasie (data-start), a nie po
+     numerze w DOM. */
+  function guideRowBlocks(row) {
+    var found = row && row.querySelectorAll ? row.querySelectorAll(".guide-program") : [];
+    var blocks = Array.prototype.slice.call(found);
+    blocks.sort(function (a, b) {
+      return (parseInt(a.getAttribute("data-start"), 10) || 0) -
+        (parseInt(b.getAttribute("data-start"), 10) || 0);
+    });
+    return blocks;
+  }
+
+  /* ◀ ▶ chodzą po programach tego samego kanału — także po tych, które dopiero
+     będą (nie da się ich włączyć, ale można je obejrzeć na osi). Gdy program
+     wychodzi za skraj widocznego zakresu, oś czasu dosuwa się razem z nim
+     (guideFitWindow), więc to podświetlenie prowadzi przesuwanie godzin,
+     a nie odwrotnie. ▲ ▼ nadal chodzą po kanałach. */
   function guideStepProgram(dir) {
     var active = document.activeElement;
     var inBlock = !!(active && active.classList && active.classList.contains("guide-program"));
@@ -7399,28 +7490,63 @@
       guidePan(dir);
       return;
     }
-    var blocks = guideEnabledBlocks(row);
+    var blocks = guideRowBlocks(row);
     var index = Array.prototype.indexOf.call(blocks, active);
-    var next = index < 0 ? null : blocks[index + dir];
+    if (index < 0) {
+      guidePan(dir);
+      return;
+    }
+    var next = blocks[index + dir] || null;
     if (next) {
       focusKeepScroll(next);
       revealGuideBlock(next);
+      /* sąsiedni program jest na skraju widocznego zakresu — dosuwamy oś tak,
+         żeby było go widać w całości (podświetlenie prowadzi godziny) */
+      guideFitWindow(parseInt(next.getAttribute("data-start"), 10),
+        parseInt(next.getAttribute("data-end"), 10));
       return;
     }
-    /* Skraj osi: sąsiedni program bierzemy z danych kanału, bo kafelek poza
-       oknem nie istnieje. Okno ustawiamy na jego godzinę (z zaokrągleniem do
-       pełnej, jak każdy przeskok osi — patrz guideSetWindow), a fokus stawiamy
-       na tym programie, tak samo jak robi to guideRedraw. */
+    /* Skraj widocznego zakresu: sąsiedni program bierzemy z danych kanału, bo
+       kafelek poza oknem nie istnieje. Oś ustawiamy tak, żeby ten program było
+       widać w całości, a fokus stawiamy na jego początku — tak samo jak robi to
+       guideRedraw po przeskoku dnia albo godzin. */
     var rowIndex = guideFocusRowIndex();
     var channel = rowIndex >= 0 ? guide.items[rowIndex] : null;
     var edge = parseInt(active.getAttribute(dir > 0 ? "data-end" : "data-start"), 10);
     var target = channel && isFinite(edge) ? guideNeighbourProgram(channel, edge, dir) : null;
     if (!target) {
+      /* dalej nie ma już nawet programu do pokazania — zostaje oś o godzinę */
       guidePan(dir);
       return;
     }
-    guideSetWindow(target.start - (target.start % 3600000));
+    var fit = guideFittedStart(target.start, target.end);
+    guideSetWindow(isFinite(fit) ? fit : target.start - (target.start % 3600000));
     focusGuideRowBlock(rowIndex, target.start + 1, 0);
+  }
+
+  /* Początek okna, w którym program [start, end) zmieści się w całości.
+     null = program już mieści się w widocznym zakresie, osi nie ruszamy.
+     Okno wyrównujemy do pełnej godziny, tak samo jak każdy inny przeskok osi
+     (◀ ▶ o godzinę, dzień, data i godzina — patrz guideSetWindow), bo podpisy
+     godzin na osi liczą się od początku okna. */
+  function guideFittedStart(start, end) {
+    if (!isFinite(start) || !isFinite(end) || end <= start) return null;
+    var span = guide.hours * 3600000;
+    var margin = Math.min(1800000, span / 4);
+    var from = guide.windowStart;
+    if (start >= from + margin && end <= from + span - margin) return null;
+    if (start < from + margin) return start - (start % 3600000);
+    var next = end - span + margin;
+    return next - (next % 3600000);
+  }
+
+  /* Dosunięcie osi do programu (patrz guideFittedStart). Fokus zostaje na tym
+     samym momencie, bo guideRedraw odtwarza go po przerysowaniu siatki. */
+  function guideFitWindow(start, end) {
+    var next = guideFittedStart(start, end);
+    if (next === null || next === guide.windowStart) return false;
+    guideSetWindow(next);
+    return true;
   }
 
   /* skok do dnia względem dziś (0 = dziś, -1 = wczoraj, -2 = przedwczoraj)
@@ -7475,7 +7601,7 @@
     var columnWidth = corner.offsetWidth || GUIDE_CHANNEL_WIDTH;
     var inner = guideInnerWidth();
     guide.hours = guideFitHours(inner, columnWidth);
-    guide.hourWidth = Math.max(GUIDE_HOUR_MIN_W, Math.floor((inner - columnWidth) / guide.hours));
+    guide.hourWidth = guideHourWidth(inner - columnWidth, guide.hours);
     container.style.setProperty("--guide-hour", guide.hourWidth + "px");
 
     for (var h = 0; h < guide.hours; h++) {
@@ -7523,6 +7649,12 @@
 
     ensureGuideScrollBound();
     guideScrollToRow(first);
+    /* Oś czasu jest oknem, a nie przewijanym widokiem: gdyby silnik przewinął
+       siatkę w poziomie (np. dosuwając sfokusowany kafelek), widoczny zakres
+       rozjechałby się z oknem czasu i program pod podświetleniem byłby ucięty. */
+    if (container.scrollLeft) container.scrollLeft = 0;
+    /* podpis programu pod podświetleniem należy do poprzedniego rysunku siatki */
+    guideFocusNote(null);
 
     var from = new Date(guide.windowStart);
     var to = new Date(guide.windowStart + guide.hours * 3600000);
@@ -7566,6 +7698,19 @@
     if (hours < GUIDE_MIN_HOURS) hours = GUIDE_MIN_HOURS;
     if (hours > GUIDE_MAX_HOURS) hours = GUIDE_MAX_HOURS;
     return hours;
+  }
+
+  /* Szerokość jednej godziny na osi: tyle, ile zostaje po podziale miejsca, i ani
+     piksela więcej — cała oś (guide.hours godzin) musi zmieścić się w szerokości
+     siatki. Przy godzinach dociągniętych do GUIDE_MIN_HOURS (wąski ekran) dzielenie
+     wypada poniżej GUIDE_HOUR_MIN_W i wcześniej szerokość była podnoszona do tego
+     minimum: oś wystawała za prawą krawędź, a że siatka przewija się tylko
+     w pionie, program na końcu zakresu — razem z nazwą — znikał z ekranu (było go
+     widać tyle, co nic). Teraz godzina zwęża się razem z ekranem, a
+     GUIDE_HOUR_FIT_W pilnuje tylko, żeby kafelek dał się jeszcze trafić. */
+  function guideHourWidth(room, hours) {
+    var fit = Math.floor(Math.max(1, room) / Math.max(1, hours));
+    return Math.max(GUIDE_HOUR_FIT_W, fit);
   }
 
   /* wysokość wiersza z CSS — odstępy muszą trafić w piksel */
@@ -7774,7 +7919,15 @@
     block.classList.toggle("past", isPast);
     block.classList.toggle("now", isNow);
     block.classList.toggle("playing", watching);
-    if (p.start > now || (isPast && !canCatchup)) block.disabled = true;
+    /* Programu z przyszłości (i tego bez archiwum) nie da się włączyć, ale ma
+       zostać na osi: pilot staje na nim i czyta, co będzie — inaczej ◀ ▶ nie
+       dałoby się przesuwać podświetlenia w przód po programach (patrz
+       guideStepProgram). Zablokowany kafelek jest więc zwykłym przyciskiem,
+       który po naciśnięciu nic nie robi (patrz onclick niżej). */
+    if (p.start > now || (isPast && !canCatchup)) {
+      block.classList.add("blocked");
+      block.setAttribute("aria-disabled", "true");
+    }
     /* na wąskim kafelku tytuł bywa ucięty — pełny pokazuje podpowiedź */
     block.title = guideClock(p.start) + "–" + guideClock(p.end) + "  " + p.title;
 
@@ -7826,12 +7979,12 @@
       var rows = grid.querySelectorAll(".guide-row");
       for (var i = 0; i < rows.length; i++) {
         if (rows[i].getAttribute("data-key") !== guide.focusKey) continue;
-        var watched = rows[i].querySelector(".guide-program.now:not([disabled])") ||
-          rows[i].querySelector(".guide-program:not([disabled])");
+        var watched = rows[i].querySelector(".guide-program.now") ||
+          rows[i].querySelector(".guide-program");
         if (watched) return watched;
       }
     }
-    var blocks = grid.querySelectorAll(".guide-program:not([disabled])");
+    var blocks = grid.querySelectorAll(".guide-program");
     if (!blocks.length) return null;
     var edge = grid.getBoundingClientRect().top + 8;
     var best = null;
@@ -7865,6 +8018,10 @@
   function revealGuideBlock(block) {
     var grid = $("guideGrid");
     if (!grid || !block || !grid.clientHeight) return;
+    /* Widok w poziomie zostaje na początku osi: tylko wtedy widoczny zakres
+       równa się oknu czasu i podświetlony kafelek nie ucieka za krawędź
+       (guideHourWidth pilnuje, żeby oś w ogóle się mieściła). */
+    if (grid.scrollLeft) grid.scrollLeft = 0;
     var head = guideRowsOffset();                       /* wysokość przyklejonej osi czasu */
     var box = grid.getBoundingClientRect();
     var rect = block.getBoundingClientRect();
@@ -7877,6 +8034,29 @@
     else if (up > 0) grid.scrollTop -= up;
     else if (down > 0) grid.scrollTop += down;
     guideEnsureAhead();
+    guideFocusNote(block);
+  }
+
+  /* Nazwa programu pod podświetleniem, nad siatką. Kafelek bywa wąski (krótki
+     program na osi), a wtedy tytuł w nim jest ucinany wielokropkiem — podpis
+     podaje więc pełną nazwę i godziny tego, na czym stoi pilot, zawsze w tym
+     samym miejscu ekranu. Bez podświetlenia (null) podpis znika. */
+  function guideFocusNote(block) {
+    var note = $("guideFocusName");
+    if (!note) return;
+    var label = block && block.querySelector ? block.querySelector(".guide-title-row span") : null;
+    var start = block && block.getAttribute ? parseInt(block.getAttribute("data-start"), 10) : NaN;
+    var end = block && block.getAttribute ? parseInt(block.getAttribute("data-end"), 10) : NaN;
+    var title = label ? (label.textContent || "") : "";
+    if (!title || !isFinite(start) || !isFinite(end)) {
+      note.textContent = "";
+      return;
+    }
+    note.textContent = t("guide_focus_name", {
+      from: guideClock(start),
+      to: guideClock(end),
+      title: title
+    });
   }
 
   /* Moment programu pod fokusem (środek kafelka) — po przewinięciu osi
@@ -7895,7 +8075,7 @@
      takiego programu — wtedy o fokusie decyduje wołający) */
   function guideBlockContaining(row, time) {
     if (!time) return null;
-    var blocks = row.querySelectorAll(".guide-program:not([disabled])");
+    var blocks = row.querySelectorAll(".guide-program");
     for (var i = 0; i < blocks.length; i++) {
       var start = parseInt(blocks[i].getAttribute("data-start"), 10);
       var end = parseInt(blocks[i].getAttribute("data-end"), 10);
@@ -7909,10 +8089,10 @@
      Bez zapamiętanego momentu zostaje dotychczasowe zachowanie: to, co leci
      teraz, a gdy takiego nie ma — pierwszy program w kanale. */
   function guideBlockAtTime(row, time) {
-    var blocks = row.querySelectorAll(".guide-program:not([disabled])");
+    var blocks = row.querySelectorAll(".guide-program");
     if (!blocks.length) return null;
     if (!time) {
-      var live = row.querySelector(".guide-program.now:not([disabled])");
+      var live = row.querySelector(".guide-program.now");
       return live || blocks[0];
     }
     var containing = guideBlockContaining(row, time);
@@ -7935,7 +8115,7 @@
     var wrap = $("guideRows");
     var rows = wrap ? wrap.querySelectorAll(".guide-row") : [];
     var local = index - guide.winStart;
-    if (local < 0 || local >= rows.length) return;
+    if (local < 0 || local >= rows.length) return null;
     var row = rows[local];
     /* Najpierw ten sam moment (◀ ▶ o godzinę: program jedzie z osią i zostaje
        pod palcem), potem ta sama godzina nowego dnia („Wczoraj”, „Dzień ›” —
@@ -7944,9 +8124,13 @@
        nie trafić wcale. */
     var block = guideBlockContaining(row, time) || guideBlockContaining(row, sameTime) ||
       guideBlockAtTime(row, time || sameTime);
-    if (!block) return;
+    if (!block) return null;
     focusKeepScroll(block);
     guideEnsureAhead();
+    guideFocusNote(block);
+    /* zwracamy kafelek: wołający (▲ ▼) wie dzięki temu, że w tym wierszu było
+       na czym stanąć, i nie idzie dalej po liście kanałów */
+    return block;
   }
 
   /* Jak daleko od górnej krawędzi siatki leży wiersz z fokusem (w pikselach
@@ -7979,8 +8163,8 @@
     var rows = grid.querySelectorAll(".guide-row");
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].getAttribute("data-key") !== guide.focusKey) continue;
-      var block = rows[i].querySelector(".guide-program.now:not([disabled])") ||
-        rows[i].querySelector(".guide-program:not([disabled])");
+      var block = rows[i].querySelector(".guide-program.now") ||
+        rows[i].querySelector(".guide-program");
       if (block) {
         focusKeepScroll(block);
         revealGuideBlock(block);
@@ -8660,15 +8844,22 @@
   }
 
   /* Wstecz na polu formularza w ustawieniach: kończy tylko pisanie w polu
-     (blur zamyka klawiaturę ekranową) i przenosi fokus na pasek zakładek, więc
-     ekran zostaje ten sam — pole opuszczamy dokładnie tam, gdzie weszliśmy.
-     Zwraca true, gdy zdarzenie zostało zużyte. */
+     (blur zamyka klawiaturę ekranową) i przenosi fokus na sąsiedni wiersz, więc
+     ekran zostaje ten sam. Wcześniej fokus szedł na pasek zakładek — z pola
+     linku EPG, które leży nisko w długiej karcie ustawień, ekran zjeżdżał wtedy
+     na sam jej początek, a podświetlenie lądowało poza wierszem, z którego
+     przyszło (patrz focusNearest). Zwraca true, gdy zdarzenie zostało zużyte. */
   function backLeavesField() {
     if ($("settingsScreen").classList.contains("hidden")) return false;
     var field = document.activeElement;
     var tag = (field && field.tagName) || "";
     if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") return false;
     if (field.blur) field.blur();
+    /* ▼ zostawia pole tak, jakby użytkownik nacisnął strzałkę w dół — to jedyny
+       ruch, który zamyka klawiaturę i nie gubi miejsca w formularzu; gdy niżej
+       nie ma już nic (ostatni wiersz), próbujemy jeszcze w górę, a pasek
+       zakładek zostaje na sam koniec, bo zjeżdża z widokiem na początek karty */
+    if (focusNearest(40) || focusNearest(38)) return true;
     focusSettingsTabs();
     return true;
   }
