@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.17";
+  var APP_VERSION = "2.1.18";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -1471,6 +1471,7 @@
   }
 
   function showScreen(id) {
+    exitPlayerEpg();
     if (id === "browserScreen") refreshRecentGroup();
     for (var i = 0; i < SCREENS.length; i++) {
       $(SCREENS[i]).classList.toggle("hidden", SCREENS[i] !== id);
@@ -1495,6 +1496,44 @@
       var first = entryFocusTarget(screen);
       if (first && first.focus) first.focus();
     }, 30);
+  }
+
+  /* Tryb dzielony: obraz (lewa kolumna) i lista programów oglądanego kanału
+     (prawa kolumna) widoczne naraz, więc „EPG” w odtwarzaczu nie zasłania już
+     transmisji. Układ robi CSS (body.player-epg), a warstwę obrazu na Androidzie
+     zwęża most setVideoSplit — obraz rysuje się pod stroną (patrz MainActivity
+     i VlcEngine), więc sam CSS jej nie ruszy. */
+  function showPlayerEpg() {
+    if (!state.watchChannel) { showScreen("archiveScreen"); return; }
+    exitPlayerEpg();
+    for (var i = 0; i < SCREENS.length; i++) {
+      $(SCREENS[i]).classList.toggle("hidden",
+        SCREENS[i] !== "playerScreen" && SCREENS[i] !== "archiveScreen");
+    }
+    document.body.classList.add("player-epg");
+    playerEpgNative(true);
+    notifyNativePlayer(true);
+    syncCornerClock();
+    stopGuideNowLine();
+  }
+
+  /* Powrót do zwykłego jednego ekranu zdejmuje tryb dzielony; woła to showScreen,
+     więc każde przejście (zmiana kanału, wybór programu, Wstecz) samo go zamyka. */
+  function exitPlayerEpg() {
+    if (!document.body || !document.body.classList) return;
+    if (!document.body.classList.contains("player-epg")) return;
+    document.body.classList.remove("player-epg");
+    playerEpgNative(false);
+  }
+
+  /* Warstwa obrazu Androida rysuje się pod stroną, więc CSS jej nie zwęzi —
+     prosimy o to most (patrz setVideoSplit w MainActivity i VlcEngine). Na webOS
+     i w przeglądarce mostu nie ma i wystarcza sam CSS. */
+  function playerEpgNative(on) {
+    var bridge = window.OpenIptvNative;
+    if (bridge && typeof bridge.setVideoSplit === "function") {
+      try { bridge.setVideoSplit(!!on); } catch (error) { /* starszy APK bez mostu */ }
+    }
   }
 
   function pad2(n) {
@@ -3503,7 +3542,10 @@
       container.appendChild(programEntry(channel, program, fromPlayer));
     });
 
-    showScreen("archiveScreen");
+    /* Lista otwarta z paska „EPG” w odtwarzaczu pokazuje się obok obrazu (tryb
+       dzielony), a nie na całym ekranie — transmisja zostaje widoczna z lewej. */
+    if (fromPlayer && state.watchChannel) showPlayerEpg();
+    else showScreen("archiveScreen");
 
     /* Lista otwarta z paska „EPG” staje na tym, co leci: fokus (i widok) idą na
        program bieżący, żeby od razu było widać kanał, na którym jesteśmy —
@@ -8906,6 +8948,13 @@
       hideContextMenu();
       return true;
     }
+    if (document.body && document.body.classList &&
+        document.body.classList.contains("player-epg")) {
+      /* tryb dzielony obraz + EPG: Wstecz zamyka panel po prawej, a obraz
+         wraca na cały ekran (patrz showPlayerEpg) */
+      closeArchive();
+      return true;
+    }
     if (!$("playerScreen").classList.contains("hidden")) {
       /* Wstecz najpierw zamyka pasek otwarty jako menu — tak samo jak nakładki
          na innych ekranach; samo wyjście z kanału zostaje na drugie naciśnięcie */
@@ -9105,7 +9154,12 @@
 
   document.addEventListener("keydown", function (event) {
     var key = event.keyCode;
-    var inPlayer = !$("playerScreen").classList.contains("hidden");
+    /* W trybie dzielonym (obraz + EPG) klawisze obsługują listę programów po
+       prawej, a nie sterowanie obrazem — dlatego taki obraz nie liczy się tu
+       jako „w odtwarzaczu”. Wstecz osobno zamyka panel (patrz handleBack). */
+    var inPlayerEpg = !!(document.body && document.body.classList &&
+      document.body.classList.contains("player-epg"));
+    var inPlayer = !inPlayerEpg && !$("playerScreen").classList.contains("hidden");
     var inGuide = !$("guideScreen").classList.contains("hidden");
 
     /* Wstecz (webOS 461, Android 4): najpierw zamyka nakładki */

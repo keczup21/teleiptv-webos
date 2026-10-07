@@ -4192,6 +4192,29 @@ check("lista i siatka EPG podpisuja odtwarzany material, a lista staje na nim fo
   src.indexOf('program_playing: "ODTWARZANE"') > 0 &&
   src.indexOf('program_playing: "PLAYING"') > 0);
 
+/* --- tryb dzielony: obraz + EPG obok siebie ------------------------------
+   „EPG” w odtwarzaczu nie zasłania już transmisji: obraz zwęża się do lewej
+   kolumny, a lista programów oglądanego kanału staje po prawej (showPlayerEpg
+   + body.player-epg). */
+check("„EPG” w odtwarzaczu dzieli ekran: obraz po lewej, program kanalu po prawej",
+  src.indexOf("function showPlayerEpg()") > 0 &&
+  src.indexOf('document.body.classList.add("player-epg")') > 0 &&
+  src.indexOf("if (fromPlayer && state.watchChannel) showPlayerEpg();") > 0 &&
+  css.indexOf("body.player-epg #playerScreen") > 0 &&
+  css.indexOf("body.player-epg #archiveScreen") > 0);
+check("powrot do jednego ekranu sam zdejmuje tryb dzielony",
+  src.indexOf("function exitPlayerEpg()") > 0 &&
+  src.indexOf('document.body.classList.remove("player-epg")') > 0 &&
+  src.indexOf("  function showScreen(id) {\n    exitPlayerEpg();") > 0);
+check("w trybie dzielonym klawisze ida do listy, a Wstecz zamyka panel",
+  src.indexOf('var inPlayerEpg = !!(document.body && document.body.classList &&') > 0 &&
+  src.indexOf('var inPlayer = !inPlayerEpg && !$("playerScreen").classList.contains("hidden");') > 0 &&
+  src.indexOf('if (document.body && document.body.classList &&\n        document.body.classList.contains("player-epg")) {\n      /* tryb dzielony') > 0);
+checkJava("warstwe obrazu na Androidzie zweza most setVideoSplit",
+  java.indexOf("public void setVideoSplit(final boolean on)") > 0 &&
+  java.indexOf("private void applyVideoSplit(boolean on)") > 0 &&
+  javaVlc.indexOf("void setSplit(boolean on)") > 0);
+
 console.log("");
 if (fails) { console.log("BLEDY: " + fails); process.exit(1); }
 console.log("Wszystkie sprawdzenia przeszly.");
