@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.14";
+  var APP_VERSION = "2.1.15";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -617,7 +617,8 @@
     help_nav_ok: "Wybierz podświetloną pozycję: kategorię, kanał albo przycisk.",
     help_nav_menu: "Menu opcji kanału bez trzymania OK — to samo, co przytrzymane OK na kafelku kanału.",
     help_nav_search: "Pole szukania. Wychodzi się z niego strzałkami: ▼ do listy kanałów, ◀ na początku tekstu do grup, ▶ na końcu do paska u góry.",
-    help_nav_back: "Zamyka nakładkę albo wraca o ekran wstecz. Na liście kanałów pyta, czy wyjść z aplikacji.",
+    help_nav_fields: "Pola w ustawieniach: ◀ ▶ zmieniają wartość — kolejna pozycja listy, przełączenie ptaszka — a ▲ ▼ wychodzą z pola do sąsiedniego wiersza. OK otwiera klawiaturę ekranową albo listę.",
+    help_nav_back: "Zamyka nakładkę albo wraca o ekran wstecz. W polu ustawień kończy najpierw pisanie (zamyka klawiaturę ekranową), a na liście kanałów pyta, czy wyjść z aplikacji.",
     help_epg: "PROGRAM TV (EPG)",
     help_epg_grid: "Przycisk „EPG” w nagłówku otwiera siatkę wszystkich kanałów na osi czasu. Program, który leci teraz, ma podpis LIVE, a pionowa linia pokazuje bieżącą godzinę.",
     help_epg_pan: "◀ ▶ chodzą po programach tego samego kanału, a gdy programy się skończą — po osi czasu, dowolnie daleko w obie strony. ▲ ▼ chodzą po kanałach, a z górnego wiersza ▲ wraca do przycisków dnia.",
@@ -924,7 +925,8 @@
     help_nav_ok: "Picks the highlighted item: a category, a channel or a button.",
     help_nav_menu: "Channel options menu without holding OK — the same as holding OK on a channel card.",
     help_nav_search: "The search box. Leave it with the arrows: ▼ to the channel list, ◀ at the start of the text to the categories, ▶ at the end to the top bar.",
-    help_nav_back: "Closes an overlay or goes one screen back. On the channel list it asks whether to quit the app.",
+    help_nav_fields: "Settings fields: ◀ ▶ change the value — the next list item, toggling a checkbox — while ▲ ▼ take you out of the field to the row above or below. OK opens the on-screen keyboard or the list.",
+    help_nav_back: "Closes an overlay or goes one screen back. In a settings field it first finishes typing (closes the on-screen keyboard); on the channel list it asks whether to quit the app.",
     help_epg: "TV GUIDE (EPG)",
     help_epg_grid: "The “EPG” button in the header opens a grid of all channels on a time axis. The programme on air carries a LIVE tag and the vertical line marks the current time.",
     help_epg_pan: "The ◀ ▶ arrows step through the programmes of the same channel, and shift the time axis once they run out — as far back or forward as you like. ▲ ▼ walk through the channels, and ▲ from the top row returns to the day buttons.",
@@ -1673,6 +1675,20 @@
     if (changed) select.value = chosen;
     syncChoiceRow(row);
     if (changed) fireChange(select);
+  }
+
+  /* krok po liście wyboru bez rozwijania systemowego okna: ◀ ▶ na polu
+     przesuwają zaznaczenie o jedną pozycję (obsługa klawiszy — patrz „pola
+     formularza”), a zmiana idzie tą samą drogą co klik w rząd przycisków, czyli
+     zdarzeniem „change”, więc ustawienie działa od razu. Na skraju listy krok
+     nic nie robi — pozycja zostaje i nic się nie zapisuje. */
+  function stepSelect(select, step) {
+    var next = select.selectedIndex + step;
+    if (next < 0 || next >= select.options.length) return false;
+    select.selectedIndex = next;
+    syncChoiceRows();
+    fireChange(select);
+    return true;
   }
 
   function buildChoiceRow(row) {
@@ -8643,6 +8659,20 @@
     else if (currentScreenId() === "playerScreen") toggleOsd();
   }
 
+  /* Wstecz na polu formularza w ustawieniach: kończy tylko pisanie w polu
+     (blur zamyka klawiaturę ekranową) i przenosi fokus na pasek zakładek, więc
+     ekran zostaje ten sam — pole opuszczamy dokładnie tam, gdzie weszliśmy.
+     Zwraca true, gdy zdarzenie zostało zużyte. */
+  function backLeavesField() {
+    if ($("settingsScreen").classList.contains("hidden")) return false;
+    var field = document.activeElement;
+    var tag = (field && field.tagName) || "";
+    if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") return false;
+    if (field.blur) field.blur();
+    focusSettingsTabs();
+    return true;
+  }
+
   /* Jedna wspólna obsługa „Wstecz” — dla klawisza pilota (webOS 461, Android 4)
      i dla sprzętowego Back na Android TV / Fire TV (MainActivity pyta o nią
      przez window.__openiptvBack). Zwraca true, gdy zdarzenie zostało zużyte. */
@@ -8867,6 +8897,11 @@
     /* Wstecz (webOS 461, Android 4): najpierw zamyka nakładki */
     if (key === 461 || key === 4) {
       event.preventDefault();
+      /* …chyba że fokus siedzi w polu ustawień: wtedy Wstecz kończy tylko
+         pisanie w polu (blur zamyka klawiaturę ekranową) i zostaje na ekranie —
+         bez tego jedno naciśnięcie wypadało z ustawień w połowie wpisywania
+         linku (patrz backLeavesField) */
+      if (backLeavesField()) return;
       handleBack();
       return;
     }
@@ -8997,48 +9032,86 @@
       return;
     }
 
-    /* Pola formularza obsługuje sam WebView: klawisz OK musi na nich zostać
-       „przepuszczony” do przeglądarki, bo tylko wtedy rozwinie się lista wyboru
-       (select), otworzy się kalendarz albo zegar (date, time) i klawiatura.
-       Wcześniej preventDefault z sekcji OK poniżej zjadał ten klawisz i np. na
-       Fire TV nie dało się rozwinąć pola „Typ źródła”. Zaznaczenia przełączamy
-       sami, bo Enter na polu wyboru nie działa jednakowo na wszystkich
-       platformach, a strzałki zostawiamy polu (lista, kursor). */
+    /* Pola formularza na pilocie. Dla WebView zostaje tylko to, czego sami nie
+       zrobimy lepiej: OK rozwija listę wyboru (select), otwiera kalendarz albo
+       zegar (date, time) i klawiaturę ekranową, a ◀ ▶ w polu tekstowym
+       przesuwają kursor. Strzałki w pionie bierzemy dla siebie, bo fokus
+       zostawał w polu na zawsze: na webOS z listy wyboru i z pola z ptaszkiem
+       nie było jak wyjść (strzałki nie robiły tam nic), a w polu do pisania
+       chodziły po tekście. Teraz tak samo jak po reszcie ustawień — ◀ ▶ zmieniają
+       wartość pola (kolejna pozycja listy, przełączenie ptaszka), a ▲ ▼
+       wyprowadzają fokus z pola do sąsiedniego wiersza (patrz focusNearest). */
     var field = document.activeElement;
     var fieldTag = (field && field.tagName) || "";
+    var fieldDown = key === 38 || key === 40;
+    var fieldAcross = key === 37 || key === 39 || key === 412 || key === 417;
 
-    if (fieldTag === "SELECT" || fieldTag === "TEXTAREA") return;
+    /* Pole szukania: strzałki mają z niego wyprowadzać fokus (pilot nie ma
+       Tab, a klawiatura ekranowa zasłania listę). ◀ i ▶ zostają w polu,
+       dopóki jest w nim co poprawiać — decyduje searchArrowTarget. */
+    if (field === $("searchInput")) {
+      var caret = field.selectionStart === null ? field.value.length : field.selectionStart;
+      var caretEnd = field.selectionEnd === null ? field.value.length : field.selectionEnd;
+      var arrow = searchArrowTarget(key, caret === 0, caretEnd === field.value.length);
+      if (arrow === "channels") {
+        event.preventDefault();
+        focusChannelEntry();
+        return;
+      }
+      if (arrow === "categories") {
+        event.preventDefault();
+        focusActiveCategory();
+        return;
+      }
+      if (arrow === "bar") {
+        event.preventDefault();
+        focusNearest(39);
+        return;
+      }
+    }
+
+    if (fieldTag === "SELECT") {
+      /* ▲ ▼ opuszczają pole (pilot nie ma Tab — to jedyne wyjście z listy) */
+      if (fieldDown) {
+        event.preventDefault();
+        focusNearest(key);
+        return;
+      }
+      /* ◀ ▶ przewijają pozycje bez rozwijania systemowego okna */
+      if (fieldAcross) {
+        event.preventDefault();
+        if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);
+        return;
+      }
+      return;   /* OK rozwija listę (długa lista godzin EPG jest wygodniejsza w oknie) */
+    }
+
+    if (fieldTag === "TEXTAREA") return;
 
     if (fieldTag === "INPUT") {
       var fieldType = (field.getAttribute("type") || "text").toLowerCase();
-      if ((fieldType === "checkbox" || fieldType === "radio") &&
-          (key === 13 || key === 23 || key === 66)) {
-        event.preventDefault();
-        if (!event.repeat && field.click) field.click();
+      /* Pole z ptaszkiem: ◀ ▶ (i OK) przełączają, a ▲ ▼ z niego wychodzą —
+         wcześniej strzałki nie robiły tu nic i fokus zostawał w polu na zawsze */
+      if (fieldType === "checkbox" || fieldType === "radio") {
+        if (fieldDown) {
+          event.preventDefault();
+          focusNearest(key);
+          return;
+        }
+        if (fieldAcross || key === 13 || key === 23 || key === 66) {
+          event.preventDefault();
+          if (!event.repeat && field.click) field.click();
+          return;
+        }
+        return;
       }
 
-      /* Pole szukania: strzałki mają z niego wyprowadzać fokus (pilot nie ma
-         Tab, a klawiatura ekranowa zasłania listę). ◀ i ▶ zostają w polu,
-         dopóki jest w nim co poprawiać — decyduje searchArrowTarget. */
-      if (field === $("searchInput")) {
-        var caret = field.selectionStart === null ? field.value.length : field.selectionStart;
-        var caretEnd = field.selectionEnd === null ? field.value.length : field.selectionEnd;
-        var arrow = searchArrowTarget(key, caret === 0, caretEnd === field.value.length);
-        if (arrow === "channels") {
-          event.preventDefault();
-          focusChannelEntry();
-          return;
-        }
-        if (arrow === "categories") {
-          event.preventDefault();
-          focusActiveCategory();
-          return;
-        }
-        if (arrow === "bar") {
-          event.preventDefault();
-          focusNearest(39);
-          return;
-        }
+      /* Pole do pisania: ◀ ▶ zostają w polu (kursor), OK otwiera klawiaturę,
+         a wyjściem z pola są ▲ ▼ — tak samo jak z każdego innego wiersza */
+      if (fieldDown) {
+        event.preventDefault();
+        focusNearest(key);
+        return;
       }
       return;
     }

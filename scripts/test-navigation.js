@@ -553,7 +553,7 @@ if (choiceStart < 0 || choiceEnd < 0 || choiceEnd <= choiceStart) {
   throw new Error("Nie znalazlem bloku list wyboru w app.js");
 }
 const codeChoice = src.slice(choiceStart, choiceEnd);
-["fireChange", "syncChoiceRow", "syncChoiceRows", "pickChoice", "buildChoiceRow", "buildChoiceRows"]
+["fireChange", "stepSelect", "syncChoiceRow", "syncChoiceRows", "pickChoice", "buildChoiceRow", "buildChoiceRows"]
   .forEach(function (fn) {
     if (codeChoice.indexOf("function " + fn) < 0) {
       throw new Error("Wyciety blok list wyboru nie ma " + fn);
@@ -593,6 +593,13 @@ function choiceHarness(withoutEvent) {
       if (this.onchange) this.onchange(event);
     }
   };
+  /* jak w przegladarce: numer pozycji i wartosc pola trzymaja sie razem, wiec
+     krok po liscie (stepSelect) zmienia tez wartosc, ktora czytaja inne funkcje */
+  let selected = 0;
+  Object.defineProperty(select, "selectedIndex", {
+    get: function () { return selected; },
+    set: function (value) { selected = value; select.value = select.options[value].value; }
+  });
 
   const sandbox = {
     document: {
@@ -676,6 +683,30 @@ function choiceHarness(withoutEvent) {
     changes === 1 && h.select.events[0].type === "change", "zmian: " + changes);
 })();
 
+/* ◀ ▶ na polu z listą wyboru: krok po pozycjach bez rozwijania systemowego okna
+   — na webOS z rozwiniętej listy nie było jak wyjść pilotem (patrz sekcja 13b) */
+(function () {
+  const h = choiceHarness();
+  h.api.buildChoiceRows();
+  let changes = 0;
+  h.select.onchange = function () { changes++; };
+  h.select.selectedIndex = 1;                  /* „Plik M3U” */
+  check("krok w bok przesuwa pozycje listy i idzie dalej jako zdarzenie „change”",
+    h.api.stepSelect(h.select, 1) === true && h.select.selectedIndex === 2 &&
+    h.select.value === "xtream" && changes === 1 && h.select.events.length === 1 &&
+    h.select.events[0].type === "change",
+    "pozycja: " + h.select.selectedIndex + ", wartosc: " + h.select.value + ", zmian: " + changes);
+  check("zaznaczenie w rzedzie przyciskow idzie za krokiem",
+    h.buttons[2].getAttribute("aria-checked") === "true" &&
+    h.buttons[1].getAttribute("aria-checked") === "false");
+  check("na skraju listy krok nic nie zmienia (bez zdarzenia i bez zapisu)",
+    h.api.stepSelect(h.select, 1) === false && h.select.selectedIndex === 2 && changes === 1);
+  check("krok w druga strone wraca po pozycjach, a na poczatku listy staje",
+    h.api.stepSelect(h.select, -1) === true && h.select.selectedIndex === 1 &&
+    h.api.stepSelect(h.select, -1) === true && h.select.selectedIndex === 0 &&
+    h.api.stepSelect(h.select, -1) === false && h.select.selectedIndex === 0 && changes === 3);
+})();
+
 check("pole z lista wyboru nie rozwija systemowego menu (ukryty <select> + rzad przyciskow)",
   html.indexOf('id="sourceType" class="choice-value"') > 0 &&
   html.indexOf('data-choice-for="sourceType"') > 0 &&
@@ -705,6 +736,67 @@ check("listy rozwijane z EPG siedza w wierszach ustawien (" + rowSelectIds.lengt
 check("fokus na liscie rozwijanej widac razem z nazwa wiersza",
   css.indexOf("body.uimode-tv .settings-card label:focus-within > span") > 0 &&
   /body\.uimode-tv \.settings-card \.row-label select:focus\s*\{[^}]*background: rgba\(91, 140, 255, \.22\)[^}]*outline: 4px solid var\(--accent\)/.test(css));
+
+/* --- 13b. pola formularza w ustawieniach (pilot) -------------------------
+   Fokus zostawał w polu na zawsze: na webOS z listy wyboru i z pola z ptaszkiem
+   nie było jak wyjść (strzałki nie robiły tam nic), w polu do pisania chodziły
+   po tekście, a Wstecz wypadało z ustawień w połowie wpisywania linku. Teraz
+   pole zmienia się w bok (◀ ▶: kolejna pozycja listy, przełączenie ptaszka),
+   wychodzi się z niego w pionie (▲ ▼), a Wstecz kończy tylko pisanie. */
+const fieldStart = src.indexOf("    var field = document.activeElement;");
+const fieldEnd = src.indexOf("/* Ustawienia: na pasku zakładek");
+if (fieldStart < 0 || fieldEnd <= fieldStart) {
+  throw new Error("Nie znalazlem bloku pol formularza w app.js");
+}
+const codeField = src.slice(fieldStart, fieldEnd);
+check("pole z lista wyboru: ▲ ▼ wyprowadzaja fokus, a ◀ ▶ przewijaja pozycje",
+  codeField.indexOf('if (fieldTag === "SELECT") {') > 0 &&
+  codeField.indexOf("if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);") > 0 &&
+  codeField.indexOf('    if (fieldTag === "TEXTAREA") return;') > 0);
+check("pole z ptaszkiem: przelacza sie w bok (i OK), a w pionie opuszcza sie pole",
+  codeField.indexOf('if (fieldType === "checkbox" || fieldType === "radio") {') > 0 &&
+  codeField.indexOf("if (fieldAcross || key === 13 || key === 23 || key === 66) {") > 0 &&
+  codeField.indexOf("if (!event.repeat && field.click) field.click();") > 0);
+check("z pola do pisania wychodzi sie w pionie (◀ ▶ zostaja przy kursorze)",
+  codeField.indexOf("/* Pole do pisania: ◀ ▶ zostają w polu (kursor), OK otwiera klawiaturę,") > 0);
+check("pole opuszcza sie tak samo jak reszta ustawien (sasiedni wiersz — focusNearest)",
+  (codeField.match(/focusNearest\(key\);/g) || []).length >= 3);
+check("pole szukania zostaje z wlasna droga (▼ do kanalow, ◀ ▶ na brzegach tekstu)",
+  codeField.indexOf("searchArrowTarget(key, caret === 0, caretEnd === field.value.length)") > 0);
+
+check("Wstecz na polu ustawien konczy pisanie, a nie zamyka ustawien",
+  src.indexOf("function backLeavesField() {") > 0 &&
+  src.indexOf("if (backLeavesField()) return;") > 0 &&
+  src.indexOf('if ($("settingsScreen").classList.contains("hidden")) return false;') > 0);
+check("pole w instrukcji opisuje nowe strzalki",
+  html.indexOf('data-i18n="help_nav_fields"') > 0 && src.indexOf("help_nav_fields:") > 0);
+
+(function () {
+  const at = src.indexOf("function backLeavesField() {");
+  const stop = src.indexOf("/* Jedna wspólna obsługa „Wstecz”");
+  if (at < 0 || stop <= at) throw new Error("Nie znalazlem backLeavesField w app.js");
+  let settingsHidden = false;
+  let tabs = 0;
+  const settingsScreen = {
+    classList: { contains: function (name) { return name === "hidden" && settingsHidden; } }
+  };
+  const field = { tagName: "INPUT", blurred: false, blur: function () { this.blurred = true; } };
+  const box = run(src.slice(at, stop), {
+    document: { activeElement: field },
+    $: function (id) { return id === "settingsScreen" ? settingsScreen : null; },
+    focusSettingsTabs: function () { tabs++; }
+  });
+  check("Wstecz na polu ustawien zostaje na ekranie: konczy pisanie i wraca na zakladki",
+    box.backLeavesField() === true && field.blurred === true && tabs === 1,
+    "blur: " + field.blurred + ", zakladki: " + tabs);
+  box.document.activeElement = { tagName: "BODY" };
+  check("Wstecz poza polem dziala jak dotad (ekran moze sie zamknac)",
+    box.backLeavesField() === false);
+  box.document.activeElement = field;
+  settingsHidden = true;
+  check("poza ekranem ustawien pole nie zatrzymuje Wstecz",
+    box.backLeavesField() === false);
+})();
 
 /* --- 14. program TV: podpis „LIVE”, podświetlenie do catch-up, linia godziny --
    Program, który leci teraz, dostaje podpis „LIVE” i samą obwódkę akcentu,

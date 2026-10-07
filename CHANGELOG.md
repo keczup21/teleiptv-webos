@@ -24,6 +24,15 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.15] — 2026-10-07
+
+### Poprawiono
+- **Z pól w ustawieniach wychodzi się pilotem** — ◀ ▶ zmieniają wartość (kolejna pozycja listy wyboru, przełączenie ptaszka), a ▲ ▼ wyprowadzają fokus z pola do wiersza obok; wcześniej fokus zostawał w polu na zawsze i z rozwiniętej listy nie było jak wrócić do ustawień.
+- **Wstecz na polu ustawień kończy tylko pisanie** — naciśnięcie zamyka klawiaturę ekranową i zostaje na ekranie ustawień, a nie wypada z nich w połowie wpisywania linku.
+
+### Dodano
+- **Instrukcja opisuje pola ustawień** — w zakładce „Instrukcja” (sekcja „Poruszanie się”) jest wiersz o pilocie w polach: ◀ ▶ zmieniają wartość, ▲ ▼ wychodzą z pola.
+
 ## [2.1.14] — 2026-10-07
 
 ### Zmieniono
