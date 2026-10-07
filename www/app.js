@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.18";
+  var APP_VERSION = "2.1.19";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -9300,6 +9300,23 @@
       return;
     }
 
+    /* Program TV — pasek dnia w nagłówku („‹ Dzień”, „Wczoraj”, „Dziś”, data
+       i godzina): gdy fokus stoi na nim, ◀ ▶ chodzą po jego przyciskach
+       i polach, a ▼ schodzi do siatki. Wcześniej ◀ ▶ zawsze przesuwały oś
+       czasu, więc fokus tkwił na „Dziś” i ani „Wczoraj”, ani pól daty i
+       godziny nie dało się dosięgnąć pilotem (patrz focusGuideHeader). */
+    if (inGuide && (key === 37 || key === 39 || key === 38 || key === 40 ||
+                    key === 412 || key === 417)) {
+      var guideHead = $("guideScreen").querySelector("header");
+      if (guideHead && guideHead.contains(document.activeElement)) {
+        event.preventDefault();
+        if (key === 40) { focusGuide(40); return; }
+        if (key === 38) return;
+        focusNearest(key === 37 || key === 412 ? 37 : 39);
+        return;
+      }
+    }
+
     /* Pola formularza na pilocie. Dla WebView zostaje tylko to, czego sami nie
        zrobimy lepiej: OK rozwija listę wyboru (select), otwiera kalendarz albo
        zegar (date, time) i klawiaturę ekranową, a ◀ ▶ w polu tekstowym
@@ -9400,8 +9417,8 @@
     }
 
     /* Program TV: ◀ ▶ chodzą po programach tego samego kanału, a gdy programy
-       się skończą — po osi czasu o godzinę (patrz guideStepProgram); przy polach
-       daty/godziny strzałki obsługuje sam formularz */
+       się skończą — po osi czasu o godzinę (patrz guideStepProgram). Fokus w
+       pasku dnia obsługuje gałąź wyżej, więc tutaj zostaje sama siatka. */
     if (inGuide && (key === 37 || key === 39 || key === 412 || key === 417)) {
       event.preventDefault();
       guideStepProgram(key === 37 || key === 412 ? -1 : 1);
