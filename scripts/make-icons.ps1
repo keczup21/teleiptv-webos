@@ -6,22 +6,15 @@
     * znak : biały telewizor (korpus + podstawka) z ciemnym ekranem,
              a na ekranie biały napis "IPTV" (kontur Arial Bold)
 
-  Wynik:
+  Wynik (to repozytorium buduje tylko paczkę .ipk):
     www\icon.png (80x80)  oraz  www\largeicon.png (130x130)
-    www\icon.svg i docs\assets\icon.svg   — ten sam znak jako wektor
-    docs\assets\icon.png (512), apple-touch-icon.png (180)
-    docs\assets\og.png (1200x630)         — karta do udostępniania linku
-    android\app\src\main\res\mipmap-*\ic_launcher.png
-                                   \ic_launcher_round.png
-                                   \ic_launcher_foreground.png
-    android\app\src\main\res\drawable-v24\ic_launcher_foreground.xml
-                                   — ten sam znak jako wektor (zapas dla ikony
-                                   adaptacyjnej, gdyby ktoś ją przełączył)
-    android\app\src\main\res\drawable*\splash.png   — ekran startowy: tło
-                                   #0a0c11 (kolor aplikacji) + ten sam znak
-                                   na środku, w rozmiarach, jakich oczekuje
-                                   Capacitor (drawable + land/port w każdej
-                                   gęstości)
+                                   — ikona i duża ikona aplikacji webOS
+                                   (appinfo.json: icon, largeIcon)
+    www\icon.svg                   — ten sam znak jako wektor (logo aplikacji
+                                   i znak w interfejsie)
+
+  Ekrany startowe i ikony Androida oraz obrazki strony projektu (docs/)
+  powstają w repozytorium teleiptv, razem z paczką .apk.
 
   Uruchomienie:
     powershell -ExecutionPolicy Bypass -File scripts\make-icons.ps1
@@ -505,61 +498,15 @@ function Get-AndroidForegroundXml {
   return (($lines -join "`n") + "`n")
 }
 
-Write-Host "TeleIPTV - generowanie ikon i ekranów startowych w $Root"
+Write-Host "TeleIPTV (webOS) - generowanie ikon aplikacji w $Root"
 Save-Logo -Path (Join-Path $Root 'www\icon.png')      -Size 80  -Mode tile
 Save-Logo -Path (Join-Path $Root 'www\largeicon.png') -Size 130 -Mode tile
 
-# Ten sam znak jako wektor: do aplikacji (manifest webOS) i na stronę.
+# Ten sam znak jako wektor - ikona SVG lezy w aplikacji i jest uzywana
+# w interfejsie; do paczki .ipk idzie razem z reszta www/.
 $svg = Get-IconSvg
-foreach ($svgRel in @('www\icon.svg', 'docs\assets\icon.svg')) {
-  Save-TextFile -Path (Join-Path $Root $svgRel) -Text $svg
-}
+Save-TextFile -Path (Join-Path $Root 'www\icon.svg') -Text $svg
 
-# Obrazki strony: favicon w PNG (Safari i iOS nie biorą SVG) i karta do
-# udostępniania linku (Facebook, X, WhatsApp SVG też odrzucają).
-Save-Logo -Path (Join-Path $Root 'docs\assets\icon.png')             -Size 512 -Mode tile
-Save-Logo -Path (Join-Path $Root 'docs\assets\apple-touch-icon.png') -Size 180 -Mode tile
-Save-ShareCard -Path (Join-Path $Root 'docs\assets\og.png') -Width 1200 -Height 630
-
-# Wektor pierwszego planu ikony adaptacyjnej (zapas dla mipmap-anydpi-v26).
-Save-TextFile -Path (Join-Path $Root 'android\app\src\main\res\drawable-v24\ic_launcher_foreground.xml') `
-  -Text (Get-AndroidForegroundXml) -Kind 'xml'
-
-$resRoot = Join-Path $Root 'android\app\src\main\res'
-$density = @(
-  @{ Dir = 'mipmap-mdpi';    Icon = 48;  Fg = 108 },
-  @{ Dir = 'mipmap-hdpi';    Icon = 72;  Fg = 162 },
-  @{ Dir = 'mipmap-xhdpi';   Icon = 96;  Fg = 216 },
-  @{ Dir = 'mipmap-xxhdpi';  Icon = 144; Fg = 324 },
-  @{ Dir = 'mipmap-xxxhdpi'; Icon = 192; Fg = 432 }
-)
-foreach ($d in $density) {
-  $dir = Join-Path $resRoot $d.Dir
-  Save-Logo -Path (Join-Path $dir 'ic_launcher.png')            -Size $d.Icon -Mode tile
-  Save-Logo -Path (Join-Path $dir 'ic_launcher_round.png')      -Size $d.Icon -Mode round
-  Save-Logo -Path (Join-Path $dir 'ic_launcher_foreground.png') -Size $d.Fg   -Mode foreground
-}
-
-# Ekrany startowe — dokładnie te pliki i te wymiary, których szuka Capacitor
-# (android\app\src\main\res\values\styles.xml: AppTheme.NoActionBarLaunch ma
-# android:background="@drawable/splash"). Android wybiera wariant land/port
-# w swojej gęstości i rozciąga obrazek na całe okno, dlatego każdy wariant ma
-# proporcje typowego ekranu w tej gęstości.
-$splash = @(
-  @{ File = 'drawable\splash.png';               W = 480;  H = 320  },
-  @{ File = 'drawable-land-mdpi\splash.png';     W = 480;  H = 320  },
-  @{ File = 'drawable-land-hdpi\splash.png';     W = 800;  H = 480  },
-  @{ File = 'drawable-land-xhdpi\splash.png';    W = 1280; H = 720  },
-  @{ File = 'drawable-land-xxhdpi\splash.png';   W = 1600; H = 960  },
-  @{ File = 'drawable-land-xxxhdpi\splash.png';  W = 1920; H = 1280 },
-  @{ File = 'drawable-port-mdpi\splash.png';     W = 320;  H = 480  },
-  @{ File = 'drawable-port-hdpi\splash.png';     W = 480;  H = 800  },
-  @{ File = 'drawable-port-xhdpi\splash.png';    W = 720;  H = 1280 },
-  @{ File = 'drawable-port-xxhdpi\splash.png';   W = 960;  H = 1600 },
-  @{ File = 'drawable-port-xxxhdpi\splash.png';  W = 1280; H = 1920 }
-)
-foreach ($s in $splash) {
-  Save-Splash -Path (Join-Path $resRoot $s.File) -Width $s.W -Height $s.H
-}
-
+# Ekran startowy, ikony Androida i obrazki strony projektu generuje
+# scripts/make-icons.ps1 w repozytorium teleiptv (razem z paczka .apk).
 Write-Host "Gotowe."

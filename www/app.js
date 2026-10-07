@@ -1,4 +1,8 @@
-/* TeleIPTV — wspólny kod dla webOS (.ipk) i Fire TV (.apk)
+/* TeleIPTV dla LG webOS (.ipk) — to repozytorium buduje wyłącznie paczkę .ipk.
+ * Kod jest bliźniaczo podobny do wersji na Android TV / Fire TV (.apk), ale od
+ * wersji 2.1.14 oba wydania rozwijają się osobno: zmiana tutaj nie trafia do
+ * repozytorium teleiptv automatycznie i odwrotnie. Wersja na Androida:
+ * https://github.com/keczup21/teleiptv
  *
  * ŹRÓDŁA (na profil):
  *   - Playlista M3U : adres URL lub plik lokalny
@@ -21,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.13";
+  var APP_VERSION = "2.1.14";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -1865,7 +1869,7 @@
      więc aktualizacja nie wymaga ADB ani komputera. webOS nie instaluje .ipk
      sam — tam pokazujemy adres wydania, a paczkę wgrywa się z komputera. */
 
-  var UPDATE_REPO = "keczup21/teleiptv";
+  var UPDATE_REPO = "keczup21/teleiptv-webos";
   var UPDATE_API = "https://api.github.com/repos/" + UPDATE_REPO + "/releases/latest";
   var UPDATE_PAGE = "https://github.com/" + UPDATE_REPO + "/releases/latest";
   var updateState = { asset: null, busy: false, progressBound: false };

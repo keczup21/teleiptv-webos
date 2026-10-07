@@ -10,19 +10,16 @@
 #   npm run bump -- 1.20.0                   # gruba zmiana
 #   npm run bump -- 1.19.1                   # poprawka albo drobiazg
 #
-# Podbija cztery miejsca, w ktorych numer wersji jest zapisany w repozytorium:
-#   www/app.js (APP_VERSION), www/appinfo.json, package.json
-#   oraz android/app/build.gradle (versionName + versionCode).
-# versionCode rosnie o 1, chyba ze podasz -VersionCode wprost.
-# Skopiowane assety Androida (android/app/src/main/assets) nie sa w repozytorium -
-# odswieza je "npx cap sync android" podczas budowania.
+# Podbija trzy miejsca, w ktorych numer wersji jest zapisany w repozytorium:
+#   www/app.js (APP_VERSION), www/appinfo.json, package.json.
+# Wszystkie trzy musza sie zgadzac - aplikacja na telewizorze pokazuje numer
+# z www/app.js, a wydanie na GitHubie numeruje sie z package.json.
+# Numer wersji w www/app.js jest tym, ktory pokazuje aplikacja na telewizorze,
+# a numer w www/appinfo.json - tym, ktory widzi system webOS na liscie aplikacji.
 param(
     # Nowy numer wersji, np. 1.20.0 (npm run bump -- 1.20.0).
     [Parameter(Position = 0)]
-    [string]$Version,
-
-    # Numer wersji dla Androida; domyslnie poprzedni + 1.
-    [int]$VersionCode = 0
+    [string]$Version
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,7 +29,6 @@ $ErrorActionPreference = "Stop"
 # Zmienne npm_config_* obslugujemy dodatkowo, bo dziala np.
 # "npm run bump -- 1.20.0 --versioncode=21".
 if (-not $Version -and $env:npm_config_version) { $Version = $env:npm_config_version }
-if ($VersionCode -le 0 -and $env:npm_config_versioncode) { $VersionCode = [int]$env:npm_config_versioncode }
 
 if (-not $Version) {
     throw 'Podaj nowa wersje: -Version 1.20.0 albo npm run bump -- 1.20.0'
@@ -79,31 +75,19 @@ if ($newValue -le $oldValue) {
     Write-Warning "$Version nie jest wieksze od $current - wersje powinny rosnac."
 }
 
-$gradleText = Get-Text "android\app\build.gradle"
-$codeMatch = [regex]::Match($gradleText, 'versionCode\s+(\d+)')
-if (-not $codeMatch.Success) {
-    throw "Nie znalazlem versionCode w android\app\build.gradle"
-}
-$oldCode = [int]$codeMatch.Groups[1].Value
-if ($VersionCode -le 0) { $VersionCode = $oldCode + 1 }
-
-Set-Bumped "www\app.js"               '(var APP_VERSION\s*=\s*")[^"]+(")'   ('${1}' + $Version + '${2}')
-Set-Bumped "www\appinfo.json"         '("version"\s*:\s*")[^"]+(")'        ('${1}' + $Version + '${2}')
-Set-Bumped "package.json"             '("version"\s*:\s*")[^"]+(")'        ('${1}' + $Version + '${2}')
-Set-Bumped "android\app\build.gradle" '(versionName\s*")[^"]+(")'          ('${1}' + $Version + '${2}')
-Set-Bumped "android\app\build.gradle" '(versionCode\s+)\d+'                ('${1}' + $VersionCode)
+Set-Bumped "www\app.js"       '(var APP_VERSION\s*=\s*")[^"]+(")' ('${1}' + $Version + '${2}')
+Set-Bumped "www\appinfo.json" '("version"\s*:\s*")[^"]+(")'      ('${1}' + $Version + '${2}')
+Set-Bumped "package.json"     '("version"\s*:\s*")[^"]+(")'      ('${1}' + $Version + '${2}')
 
 Write-Host ""
-Write-Host "Wersja $current -> ${Version}   (versionCode $oldCode -> $VersionCode)"
+Write-Host "Wersja $current -> $Version"
 Write-Host ""
 Write-Host "Podbite miejsca:"
-Write-Host ("  www/app.js                  " + [regex]::Match((Get-Text "www\app.js"), 'var APP_VERSION\s*=\s*"[^"]+"').Value)
-Write-Host ("  www/appinfo.json            " + [regex]::Match((Get-Text "www\appinfo.json"), '"version"\s*:\s*"[^"]+"').Value)
-Write-Host ("  package.json                " + [regex]::Match((Get-Text "package.json"), '"version"\s*:\s*"[^"]+"').Value)
-Write-Host ("  android/app/build.gradle    " + [regex]::Match((Get-Text "android\app\build.gradle"), 'versionCode\s+\d+').Value +
-             ", " + [regex]::Match((Get-Text "android\app\build.gradle"), 'versionName\s*"[^"]+"').Value)
+Write-Host ("  www/app.js        " + [regex]::Match((Get-Text "www\app.js"), 'var APP_VERSION\s*=\s*"[^"]+"').Value)
+Write-Host ("  www/appinfo.json  " + [regex]::Match((Get-Text "www\appinfo.json"), '"version"\s*:\s*"[^"]+"').Value)
+Write-Host ("  package.json      " + [regex]::Match((Get-Text "package.json"), '"version"\s*:\s*"[^"]+"').Value)
 Write-Host ""
 Write-Host "Dalej:"
 Write-Host "  1. wpis dla $Version w CHANGELOG.md"
-Write-Host "  2. npm run build:all"
+Write-Host "  2. npm run build:webos"
 Write-Host "  3. npm run publish --message=`"wersja $Version`" -Tag v$Version -Release"

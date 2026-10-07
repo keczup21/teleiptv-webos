@@ -16,15 +16,28 @@ const ROOT = path.join(__dirname, "..");
 const src = fs.readFileSync(path.join(ROOT, "www", "app.js"), "utf8").replace(/\r\n/g, "\n");
 const html = fs.readFileSync(path.join(ROOT, "www", "index.html"), "utf8").replace(/\r\n/g, "\n");
 const css = fs.readFileSync(path.join(ROOT, "www", "styles.css"), "utf8").replace(/\r\n/g, "\n");
-/* natywna obsługa pilota (klawisze multimedialne) — patrz sekcja 19 */
-const java = fs.readFileSync(path.join(ROOT, "android", "app", "src", "main", "java",
-  "pl", "openiptv", "player", "MainActivity.java"), "utf8").replace(/\r\n/g, "\n");
+/* Natywna obsługa pilota (MainActivity) i silnik VLC opisują paczkę Androida —
+   repozytorium webOS jej nie ma (paczka .apk powstaje w repozytorium teleiptv),
+   więc te pliki czytamy tylko wtedy, gdy są, a sprawdzenia kodu Javy i Gradle'a
+   idą przez checkJava() — bez źródeł Androida są pomijane, nie czerwone. */
+const ANDROID_DIR = path.join(ROOT, "android");
+const hasAndroid = fs.existsSync(ANDROID_DIR);
+function checkJava(name, cond, extra) {
+  if (!hasAndroid) return;
+  check(name, cond, extra);
+}
+if (!hasAndroid) {
+  console.log("  --   kod paczki Androida (Java, Gradle): pominięte (brak android/ w tym repozytorium)");
+}
+
+const java = hasAndroid ? fs.readFileSync(path.join(ANDROID_DIR, "app", "src", "main", "java",
+  "pl", "openiptv", "player", "MainActivity.java"), "utf8").replace(/\r\n/g, "\n") : "";
 /* silnik VLC — osobny plik, tak samo czytany ze źródeł (patrz sekcja 27b) */
-const javaVlc = fs.readFileSync(path.join(ROOT, "android", "app", "src", "main", "java",
-  "pl", "openiptv", "player", "VlcEngine.java"), "utf8").replace(/\r\n/g, "\n");
+const javaVlc = hasAndroid ? fs.readFileSync(path.join(ANDROID_DIR, "app", "src", "main", "java",
+  "pl", "openiptv", "player", "VlcEngine.java"), "utf8").replace(/\r\n/g, "\n") : "";
 /* paczka Androida i jej wersje (patrz sekcja 27: odtwarzacz systemowy) */
-const gradle = fs.readFileSync(path.join(ROOT, "android", "app", "build.gradle"), "utf8").replace(/\r\n/g, "\n");
-const gradleVars = fs.readFileSync(path.join(ROOT, "android", "variables.gradle"), "utf8").replace(/\r\n/g, "\n");
+const gradle = hasAndroid ? fs.readFileSync(path.join(ANDROID_DIR, "app", "build.gradle"), "utf8").replace(/\r\n/g, "\n") : "";
+const gradleVars = hasAndroid ? fs.readFileSync(path.join(ANDROID_DIR, "variables.gradle"), "utf8").replace(/\r\n/g, "\n") : "";
 
 let fails = 0;
 function check(name, cond, extra) {
@@ -852,7 +865,7 @@ check("sesja multimediow rejestruje akcje pilota (Android TV / Fire TV)",
 check("natywny odbiornik wie, ze leci obraz (most setPlayerMode)",
   src.indexOf("function notifyNativePlayer(on)") > 0 && src.indexOf("bridge.setPlayerMode(!!on);") > 0 &&
   src.indexOf('notifyNativePlayer(id === "playerScreen");') > 0);
-check("MainActivity oddaje klawisze multimedialne stronie tylko w odtwarzaczu",
+checkJava("MainActivity oddaje klawisze multimedialne stronie tylko w odtwarzaczu",
   java.indexOf("public boolean onKeyDown(int keyCode, KeyEvent event)") > 0 &&
   java.indexOf("window.__openiptvKey") > 0 &&
   java.indexOf("public void setPlayerMode(final boolean on)") > 0 &&
@@ -2890,7 +2903,7 @@ check("kondycja obrazu: zamkniecie obrazu gasi budzik",
    co przy pilocie, a obraz rysuje się POD nią — nazwy metod i zdarzeń muszą się
    zgadzać co do znaku, bo inaczej wywołanie trafia w pustkę i kanał wraca do
    JavaScriptu, czyli do problemu, który ta droga rozwiązuje. */
-check("odtwarzacz systemowy: most jest ten sam co przy pilocie i ma wszystkie metody",
+checkJava("odtwarzacz systemowy: most jest ten sam co przy pilocie i ma wszystkie metody",
   java.indexOf("\"OpenIptvNative\"") > 0 &&
   src.indexOf("window.OpenIptvNative") > 0 &&
   java.indexOf("public String playNative(final String url, final String userAgent)") > 0 &&
@@ -2904,21 +2917,21 @@ check("odtwarzacz systemowy: most jest ten sam co przy pilocie i ma wszystkie me
   src.indexOf("bridge.setNativeMuted(muted === true)") > 0 &&
   src.indexOf("bridge.stopNative()") > 0 &&
   src.indexOf("bridge.nativeInfo()") > 0);
-check("odtwarzacz systemowy: zdarzenia wracaja do strony pod ta sama nazwa",
+checkJava("odtwarzacz systemowy: zdarzenia wracaja do strony pod ta sama nazwa",
   java.indexOf("window.__openiptvNativeEvent&&window.__openiptvNativeEvent(") > 0 &&
   src.indexOf("window.__openiptvNativeEvent = exoEvent;") > 0 &&
   src.indexOf("function exoEvent(event)") > 0 &&
   java.indexOf("onVideoSizeChanged(VideoSize size)") > 0 &&
   java.indexOf("onIsPlayingChanged(boolean playing)") > 0 &&
   java.indexOf("onPlayerError(PlaybackException error)") > 0);
-check("odtwarzacz systemowy: obraz rysuje sie pod strona, wiec strona jest przezroczysta",
+checkJava("odtwarzacz systemowy: obraz rysuje sie pod strona, wiec strona jest przezroczysta",
   java.indexOf("root.addView(videoView, 0);") > 0 &&
   java.indexOf("webView.setBackgroundColor(Color.TRANSPARENT);") > 0 &&
   src.indexOf("root.classList.toggle(\"exo-player\", want)") > 0 &&
   src.indexOf("document.body.classList.toggle(\"exo-player\", want)") > 0 &&
   css.indexOf("html.exo-player, body.exo-player { background: transparent; }") > 0 &&
   css.indexOf("body.exo-player .screen { background: transparent; }") > 0);
-check("odtwarzacz systemowy: bufor na zywo krotszy niz domyslne 50 s",
+checkJava("odtwarzacz systemowy: bufor na zywo krotszy niz domyslne 50 s",
   java.indexOf(".setBufferDurationsMs(8000, 24000, 1500, 4000)") > 0 &&
   java.indexOf("player.setVideoTextureView(videoView);") > 0 &&
   java.indexOf("player.setMediaItem(MediaItem.fromUri(Uri.parse(url)));") > 0 &&
@@ -2928,7 +2941,7 @@ check("odtwarzacz systemowy: bufor na zywo krotszy niz domyslne 50 s",
    klatki nie poszły kompozytorem GPU (patrz „video-layer-fix” w styles.css), klatki
    ExoPlayera nie mogą iść sprzętową płaszczyzną obrazu — SurfaceView. TextureView
    prowadzi je tą samą drogą co <video>, więc obraz ma się gdzie pokazać. */
-check("odtwarzacz systemowy: obraz idzie kompozytorem GPU, a nie sprzetowa plaszczyzna",
+checkJava("odtwarzacz systemowy: obraz idzie kompozytorem GPU, a nie sprzetowa plaszczyzna",
   java.indexOf("import android.view.TextureView;") > 0 &&
   java.indexOf("import android.view.SurfaceView;") < 0 &&
   java.indexOf("private TextureView videoView;") > 0 &&
@@ -2939,7 +2952,7 @@ check("odtwarzacz systemowy: obraz idzie kompozytorem GPU, a nie sprzetowa plasz
   java.indexOf("videoView.setVisibility(View.VISIBLE);") > 0);
 /* Diagnostyka musi umieć odróżnić „dekoder nie nadąża” od „klatek nie widać”:
    inaczej szukanie naprawy jest zgadywaniem (patrz nativeInfo w MainActivity). */
-check("odtwarzacz systemowy: panel diagnostyki zna dekoder, klatki na obrazie i zgubione",
+checkJava("odtwarzacz systemowy: panel diagnostyki zna dekoder, klatki na obrazie i zgubione",
   java.indexOf("player.addAnalyticsListener(new AnalyticsListener()") > 0 &&
   java.indexOf("onVideoDecoderInitialized(AnalyticsListener.EventTime eventTime") > 0 &&
   java.indexOf("onDroppedVideoFrames(AnalyticsListener.EventTime eventTime") > 0 &&
@@ -2953,7 +2966,7 @@ check("odtwarzacz systemowy: panel diagnostyki zna dekoder, klatki na obrazie i 
   src.indexOf("diag_exo_frames: \"frames on screen\"") > 0 &&
   src.indexOf("diag_exo_dropped: \"zgubione klatki\"") > 0 &&
   src.indexOf("diag_exo_dropped: \"dropped frames\"") > 0);
-check("odtwarzacz systemowy: odtwarzacz odbiornika jest w paczce Androida (takze HLS)",
+checkJava("odtwarzacz systemowy: odtwarzacz odbiornika jest w paczce Androida (takze HLS)",
   gradle.indexOf("androidx.media3:media3-exoplayer:$media3Version") > 0 &&
   gradle.indexOf("androidx.media3:media3-exoplayer-hls:$media3Version") > 0 &&
   gradleVars.indexOf("media3Version = '1.4.1'") > 0);
@@ -2969,7 +2982,7 @@ check("odtwarzacz systemowy: domyslnie wylaczony — wlacza go przełącznik w u
   src.indexOf("settings.nativePlayer = $(\"nativePlayer\").checked;") > 0 &&
   src.indexOf("native_player: \"Odtwarzacz systemowy (beta)") > 0 &&
   src.indexOf("native_player: \"System player (beta)") > 0);
-check("odtwarzacz systemowy: panel diagnostyki pokazuje odtwarzacz odbiornika i jego HEVC",
+checkJava("odtwarzacz systemowy: panel diagnostyki pokazuje odtwarzacz odbiornika i jego HEVC",
   src.indexOf("function exoInfo() {") > 0 &&
   src.indexOf("var native = exoInfo();") > 0 &&
   src.indexOf("t(\"diag_native_player\")") > 0 &&
@@ -2989,13 +3002,13 @@ check("odtwarzacz systemowy: nowe napisy sa w obu jezykach",
    demukser TS/HLS i oddaje obraz przez TextureView, czyli tą samą drogą, którą
    idą klatki pozostałych odtwarzaczy. Włączany ręcznie, tylko na kanale na żywo,
    i tylko wtedy, gdy most istnieje; gdy nie da obrazu, kolejka idzie dalej. */
-check("VLC: silnik jest w paczce Androida (biblioteki tylko dla ABI telewizorow)",
+checkJava("VLC: silnik jest w paczce Androida (biblioteki tylko dla ABI telewizorow)",
   gradle.indexOf("org.videolan.android:libvlc-all:$libvlcVersion") > 0 &&
   gradleVars.indexOf("libvlcVersion = '3.6.5'") > 0 &&
   gradleVars.indexOf("libvlcAbiFilters = ['arm64-v8a', 'armeabi-v7a']") > 0 &&
   gradle.indexOf("for (abi in rootProject.ext.libvlcAbiFilters)") > 0 &&
   gradle.indexOf("useLegacyPackaging true") > 0);
-check("VLC: droge obrazu wybiera powierzchnia (TextureView), a nie kopiowanie klatek",
+checkJava("VLC: droge obrazu wybiera powierzchnia (TextureView), a nie kopiowanie klatek",
   javaVlc.indexOf("import org.videolan.libvlc.util.VLCVideoLayout;") > 0 &&
   javaVlc.indexOf("player.attachViews(layout, null, false, useTexture);") > 0 &&
   /* Renderowania wprost nie wolno wylaczac: to ta droga zatrzymywala obraz na
@@ -3009,10 +3022,10 @@ check("VLC: droge obrazu wybiera powierzchnia (TextureView), a nie kopiowanie kl
     javaVlc.indexOf("player.attachViews(layout, null, false, useTexture);") &&
   javaVlc.indexOf("root.addView(layout, 0);") > 0 &&
   javaVlc.indexOf("webView.setBackgroundColor(Color.TRANSPARENT);") > 0);
-check("VLC: sprzetowy dekoder wymagany (programowe 4K to slepa ulica)",
+checkJava("VLC: sprzetowy dekoder wymagany (programowe 4K to slepa ulica)",
   javaVlc.indexOf("media.setHWDecoderEnabled(true, true);") > 0 &&
   javaVlc.indexOf("options.add(\"--avcodec-hw=mediacodec\");") > 0);
-check("VLC: panel diagnostyki ma liczby, ktorych nie ma droga systemowa",
+checkJava("VLC: panel diagnostyki ma liczby, ktorych nie ma droga systemowa",
   javaVlc.indexOf("stats.lostPictures") > 0 &&
   javaVlc.indexOf("stats.displayedPictures") > 0 &&
   javaVlc.indexOf("stats.demuxCorrupted") > 0 &&
@@ -3022,7 +3035,7 @@ check("VLC: panel diagnostyki ma liczby, ktorych nie ma droga systemowa",
 /* Klatki na sekunde i zatrzymany obraz: dopiero te liczby odrozniaja obraz zywy od
    zatrzymanego na jednej klatce, a silnik ma oddac kanal kolejce, gdy klatki
    przestana dochodzic (patrz countFrames w VlcEngine i vlcEvent w app.js). */
-check("VLC: klatki na sekunde, licznik powierzchni obrazu i zatrzymany obraz",
+checkJava("VLC: klatki na sekunde, licznik powierzchni obrazu i zatrzymany obraz",
   javaVlc.indexOf("private static final int STALL_TICKS = 10;") > 0 &&
   javaVlc.indexOf("private void countFrames() {") > 0 &&
   javaVlc.indexOf("private void watchSurfaceFrames() {") > 0 &&
@@ -3036,7 +3049,7 @@ check("VLC: klatki na sekunde, licznik powierzchni obrazu i zatrzymany obraz",
   src.indexOf("diag_vlc_fps: \"frames per second\"") > 0 &&
   src.indexOf("diag_stall: \"obraz stanął — klatki przestały dochodzić\"") > 0 &&
   src.indexOf("diag_stall: \"picture stopped — frames stopped arriving\"") > 0);
-check("VLC: most ma te same zadania, co droga systemowa",
+checkJava("VLC: most ma te same zadania, co droga systemowa",
   java.indexOf("public String playVlc(final String url, final String userAgent, final boolean textureView)") > 0 &&
   java.indexOf("public void stopVlc()") > 0 &&
   java.indexOf("public void setVlcPlaying(final boolean playing)") > 0 &&
@@ -3057,7 +3070,7 @@ check("VLC: domyslnie wlaczony — droga obrazu, a przelacznik ja wylacza",
   src.indexOf("vlc_texture: \"VLC: picture through the picture surface (TextureView)") > 0 &&
   src.indexOf("vlc_player: \"Odtwarzacz VLC (zalecany)") > 0 &&
   src.indexOf("vlc_texture: \"VLC: obraz przez powierzchnię obrazu (TextureView)") > 0);
-check("VLC: bez mostu (webOS, przegladarka) droga jest pomijana",
+checkJava("VLC: bez mostu (webOS, przegladarka) droga jest pomijana",
   src.indexOf("function vlcBridge() {") > 0 &&
   src.indexOf("if (!bridge || typeof bridge.playVlc !== \"function\") return null;") > 0 &&
   java.indexOf("if (vlcEngine == null || !VlcEngine.available()) return \"error: brak silnika\";") > 0);
@@ -3084,7 +3097,7 @@ check("VLC: wspolna warstwa obu silnikow (pasek, pauza, wyciszenie)",
    przegladarki nie daja tam obrazu), a obraz VLC nie ma elementu <video> — pozycja
    i dlugosc okna musza przyjsc z mostu, a skok o krok jego metoda (patrz emitClock
    i setTime w VlcEngine oraz vlcEvent, vlcSeek i seekArchiveHardware w app.js). */
-check("VLC: most przekazuje pozycje i dlugosc okna oraz przyjmuje skok o krok",
+checkJava("VLC: most przekazuje pozycje i dlugosc okna oraz przyjmuje skok o krok",
   java.indexOf("public void setVlcTime(final long ms)") > 0 &&
   java.indexOf("vlcEngine.setTime(ms);") > 0 &&
   javaVlc.indexOf("void setTime(long ms) {") > 0 &&

@@ -7,7 +7,9 @@
 
    Test sprawdza trzy warstwy:
      1. www/index.html + www/app.js - przyciski, plugin, czytanie pliku, napisy,
-     2. paczka Android - plugin, jego rejestracja i uprawnienie do pamieci,
+     2. paczka Android - plugin, jego rejestracja i uprawnienie do pamieci
+        (tylko gdy w repozytorium jest katalog android/ - repozytorium webOS go
+        nie ma, bo paczke .apk buduje repozytorium teleiptv),
      3. zachowanie - prawdziwe funkcje wyciagniete z www/app.js (vm), na atrapach
         pluginu i sieci: udany wybor, anulowanie, brak wyboru, blad odczytu.
    Uruchomienie: npm run test:pick */
@@ -24,12 +26,16 @@ const PLUGIN = path.join(JAVA, "FilePlugin.java");
 const ACTIVITY = path.join(JAVA, "MainActivity.java");
 const MANIFEST = path.join(ROOT, "android", "app", "src", "main", "AndroidManifest.xml");
 
+/* Repozytorium webOS nie ma projektu Android (paczka .apk powstaje
+   w repozytorium teleiptv), wiec pliki Androida czytamy tylko wtedy, gdy sa. */
+const hasAndroid = fs.existsSync(PLUGIN) && fs.existsSync(ACTIVITY) && fs.existsSync(MANIFEST);
+
 const html = fs.readFileSync(INDEX, "utf8");
 const app = fs.readFileSync(APP, "utf8").replace(/\r\n/g, "\n");
 const css = fs.readFileSync(CSS, "utf8");
-const java = fs.readFileSync(PLUGIN, "utf8");
-const activity = fs.readFileSync(ACTIVITY, "utf8");
-const manifest = fs.readFileSync(MANIFEST, "utf8");
+const java = hasAndroid ? fs.readFileSync(PLUGIN, "utf8") : "";
+const activity = hasAndroid ? fs.readFileSync(ACTIVITY, "utf8") : "";
+const manifest = hasAndroid ? fs.readFileSync(MANIFEST, "utf8") : "";
 
 let fails = 0;
 function check(name, cond, extra) {
@@ -40,7 +46,7 @@ function flush() {
   return new Promise(function (done) { setImmediate(function () { setImmediate(done); }); });
 }
 
-console.log("wybor pliku M3U / EPG (Fire TV, Android TV)");
+console.log("wybor pliku M3U / EPG (LG webOS)");
 
 /* --- 1. przyciski w interfejsie ----------------------------------------- */
 
@@ -103,6 +109,9 @@ check("app.js: napisy wyboru pliku sa po polsku i po angielsku (" + newKeys.leng
 
 /* --- 3. paczka Android --------------------------------------------------- */
 
+if (!hasAndroid) {
+  console.log("  --   paczka Android: pominięte (brak android/ w tym repozytorium)");
+} else {
 /* Nazwa pluginu musi byc ta sama w Javie i w www - inaczej wywolanie z www
    trafia w pustke i przycisk znowu milczy. */
 const pluginName = /name\s*=\s*"([A-Za-z0-9_]+)"/.exec(java);
@@ -132,6 +141,7 @@ check("MainActivity: plugin jest zarejestrowany przed startem WebView",
   /registerPlugin\(FilePlugin\.class\)/.test(activity));
 check("AndroidManifest.xml: czytanie pamieci tylko do Androida 12 (SDK 32)",
   /<uses-permission[^>]*READ_EXTERNAL_STORAGE[^>]*maxSdkVersion="32"/.test(manifest));
+}
 
 /* --- 4. style ------------------------------------------------------------ */
 
