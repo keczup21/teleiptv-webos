@@ -24,6 +24,15 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.20] — 2026-10-07
+
+### Poprawiono
+- **Obraz nie znika po zamknięciu programu TV w odtwarzaczu** — zmiana szerokości obrazu w trybie dzielonym wymusza teraz ponowne złożenie warstwy klatki, więc po powrocie do pełnego ekranu transmisja zostaje widoczna.
+- **Pole playlisty nie jest już pułapką dla pilota** — gdy nad listą w nagłówku nie ma nic, ▲ przenosi fokus w drugą stronę, zamiast zatrzymywać go w miejscu.
+- **Pola adresów dosuwają się same** — karta ustawień dosuwa wiersz linku EPG i źródeł Xtream/M3U sama, zamiast zjeżdżać po swojemu po użyciu „Użyj linku EPG”, zmianie typu źródła albo nowym profilu.
+- **Karta ustawień otwiera się od góry** — miejsce przewinięcia z poprzedniej wizyty nie wraca już przy ponownym wejściu w ustawienia.
+- **Lista playlisty i profilu świeci na pilocie** — oba pola dostają akcentowe tło i grubą obwódkę, więc widać, że stoi na nich fokus.
+
 ## [2.1.19] — 2026-10-07
 
 ### Poprawiono

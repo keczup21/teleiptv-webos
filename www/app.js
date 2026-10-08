@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.19";
+  var APP_VERSION = "2.1.20";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -1513,6 +1513,10 @@
     document.body.classList.add("player-epg");
     playerEpgNative(true);
     notifyNativePlayer(true);
+    /* Zwężenie ekranu odtwarzacza zmienia rozmiar warstwy obrazu — na webOS
+       sama warstwa potrafi nie pójść za CSS i obraz zostaje czarny (patrz
+       refreshVideoLayer). */
+    refreshVideoLayer();
     syncCornerClock();
     stopGuideNowLine();
   }
@@ -1524,6 +1528,9 @@
     if (!document.body.classList.contains("player-epg")) return;
     document.body.classList.remove("player-epg");
     playerEpgNative(false);
+    /* Powrót do pełnego ekranu to znów zmiana rozmiaru warstwy obrazu — dosuwamy
+       ją tak samo jak przy wejściu w tryb dzielony (patrz refreshVideoLayer). */
+    refreshVideoLayer();
   }
 
   /* Warstwa obrazu Androida rysuje się pod stroną, więc CSS jej nie zwęzi —
@@ -1668,6 +1675,12 @@
     /* otwieramy tę zakładkę, w której użytkownik był ostatnio */
     showSettingsTab(settingsTab);
     showScreen("settingsScreen");
+    /* Karta otwiera się zawsze od góry — inaczej zostawało w niej miejsce z
+       poprzedniej wizyty (np. zjechane do linku EPG) i po ponownym wejściu
+       ekran „sam” wracał na ten wiersz. */
+    var settingsScreen = $("settingsScreen");
+    settingsScreen.scrollTop = 0;
+    settingsScreen.scrollLeft = 0;
     /* fokus na widocznej zakładce — showScreen() stawia go na pierwszym
        przycisku karty, a to nie zawsze jest zakładka otwarta */
     window.setTimeout(focusSettingsTabs, 60);
@@ -7156,6 +7169,37 @@
     }
   }
 
+  /* Fokus na pole formularza z kontrolowanym dosunięciem. Samo .focus() każe
+     przeglądarce zjechać do pola po swojemu — na webOS karta ustawień potrafi
+     wtedy uciec pod sam link EPG albo pod koniec formularza. Dlatego wyłączamy
+     wbudowane przewijanie i dosuwamy ekran sami (keepInView). */
+  function focusField(element) {
+    if (!element || !element.focus) return;
+    try {
+      element.focus({ preventScroll: true });
+    } catch (error) {
+      element.focus();
+    }
+    keepInView(element);
+  }
+
+  /* Tryb dzielony zmienia szerokość ekranu odtwarzacza (patrz body.player-epg),
+     a na webOS warstwa obrazu potrafi nie pójść za tą zmianą — obraz zostaje
+     czarny albo zwężony do starego rozmiaru. Wymuszamy ponowne złożenie klatki
+     klasą „video-layer-fix” (ten sam trik co przy braku obrazu w applyVideoLayerFix):
+     zakładamy ją na chwilę i wracamy do stanu z ustawień. */
+  function refreshVideoLayer() {
+    if (!platformInfo || platformInfo.os !== "webos") return;
+    if (!document.body || !document.body.classList) return;
+    var video = $("video");
+    if (!video) return;
+    document.body.classList.add("video-layer-fix");
+    void video.offsetWidth;
+    window.setTimeout(function () {
+      if (!settings.videoLayerFix) document.body.classList.remove("video-layer-fix");
+    }, 80);
+  }
+
   /* nawigacja pilotem: wybiera najbliższy element w kierunku strzałki */
   function focusNearest(keyCode) {
     var current = document.activeElement;
@@ -9359,7 +9403,11 @@
       /* ▲ ▼ opuszczają pole (pilot nie ma Tab — to jedyne wyjście z listy) */
       if (fieldDown) {
         event.preventDefault();
-        focusNearest(key);
+        /* Ze skrajnego wiersza (lista playlisty w nagłówku nie ma nic nad sobą)
+           w tę stronę nie ma już nic — wtedy idziemy w drugą, żeby pole nie było
+           pułapką, bo na pilocie nie ma Tab. */
+        var moved = focusNearest(key);
+        if (!moved) moved = focusNearest(key === 40 ? 38 : 40);
         return;
       }
       /* ◀ ▶ przewijają pozycje bez rozwijania systemowego okna */
@@ -9610,8 +9658,8 @@
   $("sourceType").onchange = function () {
     updateSourceSections();
     var type = $("sourceType").value;
-    if (type === "xtream") $("xtreamServer").focus();
-    else if (type === "m3u-url") $("playlistUrl").focus();
+    if (type === "xtream") focusField($("xtreamServer"));
+    else if (type === "m3u-url") focusField($("playlistUrl"));
   };
 
   $("language").onchange = function () {
@@ -9756,7 +9804,7 @@
     draft.epgName = "";
     $("epgFile").value = "";
     updateEpgPicker();
-    $("epgUrl").focus();
+    focusField($("epgUrl"));
   };
 
   $("settingsProfile").onchange = function () {
@@ -9768,7 +9816,7 @@
 
   $("newProfile").onclick = function () {
     loadProfileIntoForm(null);
-    $("profileName").focus();
+    focusField($("profileName"));
   };
 
   $("deleteProfile").onclick = function () {

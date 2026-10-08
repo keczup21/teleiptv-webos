@@ -1343,4 +1343,14 @@ body.uimode-tv .settings-card .row-label select:focus {
   outline: 4px solid var(--accent);
   outline-offset: 3px;
 }
+/* Lista playlisty w nagłówku i lista profilu w karcie to też <select>, ale
+   stoją poza wierszem .row-label — bez tego samego podświetlenia nie było
+   widać, że fokus stoi właśnie na nich. */
+body.uimode-tv #profileSwitcher:focus,
+body.uimode-tv #settingsProfile:focus {
+  background: rgba(91, 140, 255, .22);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, .28);
+  outline: 4px solid var(--accent);
+  outline-offset: 3px;
+}
 
