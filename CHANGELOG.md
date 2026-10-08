@@ -24,6 +24,16 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.29] — 2026-10-07
+
+### Dodano
+- **Pasek postępu na kafelku kanału mówi, ile zostało** — pod kolorowym paskiem bieżącego programu stoi teraz tor (tło) i podpis „jeszcze X min”, tak samo jak w wersji na Androida; sam cienki pasek bez tła i opisu nie mówił, co mierzy.
+
+### Poprawiono
+- **Lista programów przewija się sama, a przyciski „Na żywo”/„Wstecz” zostają na górze** — dotąd cała lista razem z nagłówkiem rosła poza ekran i nie dawała się przewinąć; teraz nagłówek stoi w miejscu, a przewija się sam spis programów (tak jak w wersji na Androida).
+- **Wyjście z pola w ustawieniach zawsze ląduje na sąsiednim wierszu** — pole do pisania puszcza pilota tak samo jak lista wyboru: gdy natywna klawiatura odda fokus, pole przekazuje go do sąsiada, a na skraju formularza w drugą stronę, więc żadnego pola nie da się „zablokować”.
+- **Krok pilota w karcie ustawień nie zjedzie już przez całą kartę** — dosunięcie ekranu nigdy nie przewija o więcej niż pół ekranu, co ucina pojedynczy skok na sam dół formularza (do „Zapisz i pobierz”).
+
 ## [2.1.28] — 2026-10-07
 
 ### Dodano

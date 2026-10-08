@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.28";
+  var APP_VERSION = "2.1.29";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -394,6 +394,7 @@
     loading_epg: "Pobieranie EPG…", parsing_epg: "Parsowanie EPG…",
     channels_count: "kanałów", epg_programs: "programów", epg_no_data: "brak danych",
     no_epg: "Brak informacji EPG", next: "Następnie", error: "Błąd:", hourly_recording: "Nagranie godzinowe",
+    program_left: "jeszcze {m} min", program_ending: "za chwilę koniec",
     archive_title: "Archiwum • ", days_back: " dni wstecz", archive_catchup: "Archiwum / catch-up",
     err_http: "Serwer zwrócił HTTP {code}", err_http_access: "Serwer zwrócił HTTP {code} (brak dostępu).",
     err_network: "Nie można pobrać danych (sieć / CORS).", err_timeout: "Przekroczono czas połączenia.",
@@ -710,6 +711,7 @@
     loading_epg: "Loading EPG…", parsing_epg: "Parsing EPG…",
     channels_count: "channels", epg_programs: "programs", epg_no_data: "no data",
     no_epg: "No EPG info", next: "Next", error: "Error:", hourly_recording: "Hourly recording",
+    program_left: "{m} min left", program_ending: "ending soon",
     archive_title: "Archive • ", days_back: " days back", archive_catchup: "Archive / catch-up",
     err_http: "Server returned HTTP {code}", err_http_access: "Server returned HTTP {code} (access denied).",
     err_network: "Cannot fetch data (network / CORS).", err_timeout: "Connection timed out.",
@@ -1611,7 +1613,10 @@
   function focusSettingsPanel() {
     var target = entryFocusTarget($(settingsPanelId(settingsTab)));
     if (target && target.focus) {
-      target.focus();
+      /* kontrolowane dosunięcie — samo .focus() każe webOS-owi zjechać do pola
+         po swojemu i karta ustawień szarpie przy wejściu w zakładkę (patrz
+         focusField) */
+      focusField(target);
       return;
     }
     focusNearest(40);
@@ -1620,7 +1625,7 @@
   /* fokus na zakładce, w której użytkownik był ostatnio */
   function focusSettingsTabs() {
     var tab = $(settingsTabId(settingsTab));
-    if (tab && tab.focus) tab.focus();
+    if (tab && tab.focus) focusField(tab);
   }
 
   function bindSettingsTabs() {
@@ -3441,15 +3446,31 @@
     main.appendChild(nowRow);
 
     if (now) {
-      /* Postęp bieżącego programu stoi zaraz pod jego wierszem, a PRZED
-         wierszem „Następnie…” — bo mierzy właśnie ten program. Wcześniej był
-         dokładany na końcu kafelka (po „Następnie…”), więc wyglądał, jakby
-         dotyczył następnej audycji (patrz .channel-progress w styles.css). */
+      /* Postęp bieżącego programu: tor + kolorowe wypełnienie + podpis
+         „jeszcze X min”. Pasek stoi w kafelku zaraz pod wierszem bieżącego
+         programu, a PRZED wierszem „Następnie…” — bo mierzy właśnie ten
+         program. Wcześniej był dokładany na końcu (po „Następnie…”), więc
+         wyglądał, jakby dotyczył następnej audycji (patrz .channel-progress-row
+         w styles.css). */
+      var progRow = document.createElement("span");
+      progRow.className = "channel-progress-row";
+
+      var track = document.createElement("i");
+      track.className = "channel-progress-track";
       var progress = document.createElement("i");
       progress.className = "channel-progress";
       var pct = Math.max(0, Math.min(100, (Date.now() - now.start) / (now.end - now.start) * 100));
       progress.style.width = pct + "%";
-      main.appendChild(progress);
+      track.appendChild(progress);
+      progRow.appendChild(track);
+
+      var timeLeft = document.createElement("small");
+      timeLeft.className = "channel-progress-left";
+      var minutesLeft = Math.max(0, Math.round((now.end - Date.now()) / 60000));
+      timeLeft.textContent = minutesLeft < 1 ? t("program_ending") : t("program_left", { m: minutesLeft });
+      progRow.appendChild(timeLeft);
+
+      main.appendChild(progRow);
     }
 
     if (next) {
@@ -7257,9 +7278,12 @@
        Jeden krok pilota dosuwa tylko sąsiedni wiersz, więc większy skok zawsze
        znaczy błąd pomiaru (nieaktualny albo zerowy prostokąt) — zjazd na koniec
        długiego formularza, dokładnie tam, gdzie stoją „Zapisz i pobierz”
-       i „Wstecz”. Dlatego przycinamy go do jednego ekranu. */
-    if (down) parent.scrollTop += Math.max(-view.height, Math.min(view.height, down));
-    if (across) parent.scrollLeft += Math.max(-view.width, Math.min(view.width, across));
+       i „Wstecz”. Dlatego nigdy nie przewijamy więcej niż pół ekranu: to i tak
+       z zapasem pokrywa sąsiedni wiersz, a ucina każdy skok przez całą kartę. */
+    var limitY = Math.max(1, Math.round(view.height * 0.5));
+    var limitX = Math.max(1, Math.round(view.width * 0.5));
+    if (down) parent.scrollTop += Math.max(-limitY, Math.min(limitY, down));
+    if (across) parent.scrollLeft += Math.max(-limitX, Math.min(limitX, across));
 
     /* Zapamiętane miejsce fokusu musi być aktualne po dosunięciu ekranu. */
     if ((down || across) && focusAnchor && focusAnchor.el === element) {
@@ -9641,10 +9665,18 @@
       }
 
       /* Pole do pisania: ◀ ▶ zostają w polu (kursor), OK otwiera klawiaturę,
-         a wyjściem z pola są ▲ ▼ — tak samo jak z każdego innego wiersza */
+         a wyjściem z pola są ▲ ▼ — tak samo jak z każdego innego wiersza.
+         Wyjście robimy w dwóch krokach: najpierw szukamy sąsiada, a gdy pole
+         (albo natywna klawiatura ekranowa) odda fokus z powrotem, zabieramy go
+         i szukamy jeszcze raz — w drugą stronę, gdy w tę nie ma już nic. Bez
+         tego ze skrajnego wiersza nie dało się wyjść (pilot nie ma Tab),
+         a na webOS klawiatura zostawiała fokus w polu. */
       if (fieldDown) {
         event.preventDefault();
-        focusNearest(key);
+        if (!focusNearest(key) && document.activeElement === field) {
+          if (field.blur) field.blur();
+          focusNearest(key === 40 ? 38 : 40);
+        }
         return;
       }
       return;

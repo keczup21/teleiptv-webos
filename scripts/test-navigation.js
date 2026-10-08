@@ -353,10 +353,13 @@ check("kafelek kanalu ma sama gwiazdke ulubionych (bez przycisku „<<” na arc
   src.indexOf("archive-button") < 0 && src.indexOf("setIconLabel(archive") < 0);
 /* Pasek postępu dotyczy programu, który leci teraz, więc stoi w kafelku zaraz
    pod jego wierszem, a przed wierszem „Następnie…”. Był dokładany na końcu
-   i wyglądał, jakby opisywał następną audycję. */
+   i wyglądał, jakby opisywał następną audycję. Tor + wypełnienie + podpis
+   „jeszcze X min” (jak w wersji na Androida) tworzą jeden wiersz (progRow). */
 check("pasek postepu stoi miedzy biezacym programem a wierszem nastepnym",
-  src.indexOf("main.appendChild(nowRow)") < src.indexOf("main.appendChild(progress)") &&
-  src.indexOf("main.appendChild(progress)") < src.indexOf("main.appendChild(nextRow)"));
+  src.indexOf("main.appendChild(nowRow)") < src.indexOf("main.appendChild(progRow)") &&
+  src.indexOf("main.appendChild(progRow)") < src.indexOf("main.appendChild(nextRow)") &&
+  src.indexOf("progRow.appendChild(track)") > 0 &&
+  src.indexOf("progRow.appendChild(timeLeft)") > 0);
 check("nagrania zostaja pod reka: menu opcji kanalu nadal ma archiwum",
   src.indexOf('ctxButton(t("ctx_archive")') > 0 && css.indexOf(".archive-button") < 0);
 check("filtrowanie listy przy wpisywaniu zapytania zostaje bez zmian",
@@ -542,8 +545,8 @@ function scrollHarness() {
   const api = scrollHarness();
   const box = fakeScrollBox(1000);
   api.keepInView(fakeRow(box, 20000, 60));   /* rozjechany pomiar: wiersz hen daleko */
-  check("krok pilota nie przewija dalej niz o jeden ekran",
-    box.scrollTop === 1000, String(box.scrollTop));
+  check("krok pilota nie przewija dalej niz o pol ekranu (blokada skoku przez cala karte)",
+    box.scrollTop === 500, String(box.scrollTop));
 })();
 
 const focusStart = src.indexOf("function focusNearest(");
@@ -1100,6 +1103,22 @@ check("podpis Program EPG - nazwa kanalu nad przyciskami listy",
   html.indexOf('class="archive-nav"') > 0 &&
   src.indexOf('heading.textContent = t("epg_panel_title") + " - " + channel.name;') > 0 &&
   css.indexOf("#archiveScreen header.archive-header") > 0);
+/* Lista programów przewija się sama, a nagłówek z przyciskami zostaje na górze —
+   bez tego cała lista spychała „Na żywo”/„Wstecz” poza ekran (patrz
+   #archiveScreen w styles.css). To samo ustawienie jest w wersji na Androida. */
+check("lista programow przewija sie sama, naglowek zostaje na gorze",
+  css.indexOf("#archiveScreen { display: flex; flex-direction: column; }") > 0 &&
+  css.indexOf("#archiveScreen .programs { flex: 1; min-height: 0; }") > 0 &&
+  css.indexOf("#archiveScreen header.archive-header {\n  flex: none;") > 0);
+/* Pasek postępu bieżącego programu na kafelku kanału: tor + wypełnienie + podpis
+   „jeszcze X min” — tak samo jak w wersji na Androida (patrz .channel-progress-row). */
+check("pasek postepu programu na kafelku kanalu: tor, wypelnienie i podpis",
+  src.indexOf('progRow.className = "channel-progress-row";') > 0 &&
+  src.indexOf('track.className = "channel-progress-track";') > 0 &&
+  src.indexOf('timeLeft.className = "channel-progress-left";') > 0 &&
+  src.indexOf('t("program_left"') > 0 &&
+  css.indexOf(".channel-progress-track") > 0 &&
+  css.indexOf(".channel-progress-left") > 0);
 /* Na liście programów mocne podświetlenie (obwódka) należy tylko do wpisu
    wybieranego pilotem — program LIVE i odtwarzany znaczy sama akcentowa godzina
    i podpis, więc nie świecą się dwa miejsca naraz. */
