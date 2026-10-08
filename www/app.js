@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.24";
+  var APP_VERSION = "2.1.25";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -3411,19 +3411,23 @@
       : t("no_epg");
     main.appendChild(nowRow);
 
-    if (next) {
-      var nextRow = document.createElement("small");
-      nextRow.className = "channel-next";
-      nextRow.textContent = t("next") + " " + pad2(new Date(next.start).getHours()) + ":" + pad2(new Date(next.start).getMinutes()) + "  " + next.title;
-      main.appendChild(nextRow);
-    }
-
     if (now) {
+      /* Postęp bieżącego programu stoi zaraz pod jego wierszem, a PRZED
+         wierszem „Następnie…” — bo mierzy właśnie ten program. Wcześniej był
+         dokładany na końcu kafelka (po „Następnie…”), więc wyglądał, jakby
+         dotyczył następnej audycji (patrz .channel-progress w styles.css). */
       var progress = document.createElement("i");
       progress.className = "channel-progress";
       var pct = Math.max(0, Math.min(100, (Date.now() - now.start) / (now.end - now.start) * 100));
       progress.style.width = pct + "%";
       main.appendChild(progress);
+    }
+
+    if (next) {
+      var nextRow = document.createElement("small");
+      nextRow.className = "channel-next";
+      nextRow.textContent = t("next") + " " + pad2(new Date(next.start).getHours()) + ":" + pad2(new Date(next.start).getMinutes()) + "  " + next.title;
+      main.appendChild(nextRow);
     }
 
     main.onclick = function () {

@@ -351,6 +351,12 @@ check("pasek odtwarzacza i menu opcji wstawiaja napisy z ikona",
 check("kafelek kanalu ma sama gwiazdke ulubionych (bez przycisku „<<” na archiwum)",
   src.indexOf('setIconLabel(favorite, isFavorite(channel) ? "★" : "☆")') > 0 &&
   src.indexOf("archive-button") < 0 && src.indexOf("setIconLabel(archive") < 0);
+/* Pasek postępu dotyczy programu, który leci teraz, więc stoi w kafelku zaraz
+   pod jego wierszem, a przed wierszem „Następnie…”. Był dokładany na końcu
+   i wyglądał, jakby opisywał następną audycję. */
+check("pasek postepu stoi miedzy biezacym programem a wierszem nastepnym",
+  src.indexOf("main.appendChild(nowRow)") < src.indexOf("main.appendChild(progress)") &&
+  src.indexOf("main.appendChild(progress)") < src.indexOf("main.appendChild(nextRow)"));
 check("nagrania zostaja pod reka: menu opcji kanalu nadal ma archiwum",
   src.indexOf('ctxButton(t("ctx_archive")') > 0 && css.indexOf(".archive-button") < 0);
 check("filtrowanie listy przy wpisywaniu zapytania zostaje bez zmian",
