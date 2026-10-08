@@ -554,6 +554,14 @@ check("nawigacja pilotem dosuwa ekran z zapasem, a nie do samej krawedzi",
   codeFocus.indexOf("keepInView(best)") > 0 && codeFocus.indexOf("scrollIntoView") < 0);
 check("zgubiony fokus liczy od ostatniego miejsca, a nie od poczatku ekranu",
   codeFocus.indexOf("focusAnchor") > 0 && codeFocus.indexOf("focusAnchor.box") > 0);
+/* Samo .focus() kaze przegladarce zjechac do elementu po swojemu — na webOS karta
+   ustawien szarpala wtedy w dol przy kazdym kroku pilota (dwa ruchy naraz:
+   przegladarka + keepInView). Teraz fokus idzie bez wbudowanego przewijania. */
+check("fokus z pilota dosuwa ekran bez wbudowanego przewijania (bez szarpania w dol)",
+  src.indexOf("function focusWithoutScroll(element) {") > 0 &&
+  src.indexOf("element.focus({ preventScroll: true })") > 0 &&
+  codeFocus.indexOf("focusWithoutScroll(best)") > 0 &&
+  codeFocus.indexOf("best.focus()") < 0);
 
 /* --- 12. przyciski aktualizacji w trakcie pobierania --------------------
    `disabled` na przycisku „Pobierz i zainstaluj” zabieralo fokus w trakcie
@@ -798,6 +806,20 @@ check("strzalki w natywnej liscie lapane juz w fazie przechwytywania (webOS)",
   src.indexOf("document.addEventListener(\"keydown\", trapFormControlKey, true);") > 0 &&
   src.indexOf("if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);") > 0 &&
   src.indexOf('if (field.blur) field.blur();') > 0);
+/* Wyjscie z ptaszka (checkbox/radio) mialo tylko blur + szukanie sasiada: na skraju
+   formularza (albo gdy natywne pole oddawalo fokus) zostawalo bez wyjscia. Teraz ma
+   ten sam zapas co lista wyboru — najpierw sasiad, a potem druga strona. */
+check("wyjscie z ptaszka ma zapas jak z listy wyboru (pole nie jest pulapka)",
+  (src.match(/if \(!focusNearest\(key\)\) focusNearest\(key === 40 \? 38 : 40\);/g) || []).length >= 3 &&
+  src.indexOf('if (type !== "checkbox" && type !== "radio") return;') > 0);
+/* Programy EPG dochodza po tym, jak uzytkownik zdazyl otworzyc Program TV albo liste
+   programow kanalu — widok odswiezamy sami (jak w wersji APK), zeby nie trzeba bylo
+   z niego wychodzic i wracac. */
+check("otwarty Program TV / lista programow odswieza sie po dojsciu EPG (jak w APK)",
+  src.indexOf("function refreshOpenEpgViews() {") > 0 &&
+  src.indexOf("refreshOpenEpgViews();") > 0 &&
+  /renderGuide\(\);\s+focusGuideWatched\(\);\s+updateGuideNowLine\(\);/.test(src) &&
+  src.indexOf("openArchive(archive.channel, { fromPlayer: archive.fromPlayer });") > 0);
 
 /* Po wpisaniu znaku lista kanalow rysuje sie od nowa; na webOS klawiatura
    ekranowa oddaje wtedy fokus cialu strony, wiec bez tego fokus uciekal do
@@ -894,7 +916,8 @@ check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
       el: field,
       box: { top: -500, left: 100, bottom: -442, right: 900, width: 800, height: 58 }
     },
-    keepInView: function () {}
+    keepInView: function () {},
+    focusWithoutScroll: function (element) { if (element && element.focus) element.focus(); }
   };
   const api = run(codeFocus, sandbox);
   api.focusNearest(40);

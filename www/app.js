@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.27";
+  var APP_VERSION = "2.1.28";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -2867,6 +2867,10 @@
         if (state.channels.length) {
           selectGroup(state.selectedGroup, document.querySelector(".category.active"));
         }
+        /* Ekran otwarty PRZED końcem parsowania (Program TV albo lista programów
+           kanału) był pusty i nie odświeżał się sam — trzeba było wyjść i wejść
+           ponownie, żeby zobaczyć programy. Dosuwamy EPG tam, gdzie jest widoczne. */
+        refreshOpenEpgViews();
         setStatus(state.channels.length + " " + t("channels_count") + " • EPG: " + count + " " + t("epg_programs"));
       });
     }, function (error) {
@@ -2879,6 +2883,29 @@
       setStatus(state.channels.length + " " + t("channels_count") + " • EPG: " + t("epg_no_data") +
         " (" + (error && error.message ? error.message : error) + ")");
     });
+  }
+
+  /* Programy doszły (albo się zmieniły) po tym, jak użytkownik zdążył otworzyć
+     Program TV albo listę programów kanału. Rysujemy ten widok od nowa, żeby
+     programy pojawiły się bez wychodzenia i wracania. Woła to
+     loadEpgInBackground po zakończeniu parsowania (patrz refreshEpg). */
+  function refreshOpenEpgViews() {
+    var guideScreen = $("guideScreen");
+    if (guideScreen && !guideScreen.classList.contains("hidden")) {
+      /* Program TV: zachowujemy okno czasu i pozycję (guide.windowStart/anchor),
+         więc wystarczy przerysować siatkę i wrócić na program, który leci teraz */
+      renderGuide();
+      focusGuideWatched();
+      updateGuideNowLine();
+      return;
+    }
+    var archiveScreen = $("archiveScreen");
+    if (archiveScreen && !archiveScreen.classList.contains("hidden") && archive.channel) {
+      /* lista programów kanału: otwieramy ją ponownie tym samym wejściem, którym
+         przyszła (z listy albo z paska „EPG” w odtwarzaczu) — openArchive robi
+         od nowa nagłówek, pozycje i fokus na programie bieżącym */
+      openArchive(archive.channel, { fromPlayer: archive.fromPlayer });
+    }
   }
 
   /* EPG ruszamy dopiero wtedy, gdy lista kanałów jest już narysowana, pilot ma
@@ -7240,17 +7267,26 @@
     }
   }
 
-  /* Fokus na pole formularza z kontrolowanym dosunięciem. Samo .focus() każe
-     przeglądarce zjechać do pola po swojemu — na webOS karta ustawień potrafi
-     wtedy uciec pod sam link EPG albo pod koniec formularza. Dlatego wyłączamy
-     wbudowane przewijanie i dosuwamy ekran sami (keepInView). */
-  function focusField(element) {
+  /* Fokus bez wbudowanego przewijania. Samo .focus() każe przeglądarce zjechać
+     do elementu po swojemu, a ekran dosuwamy sami (keepInView) — inaczej każdy
+     krok pilota robi dwa ruchy naraz (przeglądarka + keepInView) i karta ustawień
+     szarpie w dół, gdy wychodzi się z przycisku albo pola. */
+  function focusWithoutScroll(element) {
     if (!element || !element.focus) return;
     try {
       element.focus({ preventScroll: true });
     } catch (error) {
       element.focus();
     }
+  }
+
+  /* Fokus na pole formularza z kontrolowanym dosunięciem. Samo .focus() każe
+     przeglądarce zjechać do pola po swojemu — na webOS karta ustawień potrafi
+     wtedy uciec pod sam link EPG albo pod koniec formularza. Dlatego wyłączamy
+     wbudowane przewijanie i dosuwamy ekran sami (keepInView). */
+  function focusField(element) {
+    if (!element || !element.focus) return;
+    focusWithoutScroll(element);
     keepInView(element);
   }
 
@@ -7314,7 +7350,7 @@
     }
 
     if (!box || (!box.width && !box.height)) {
-      candidates[0].focus();
+      focusWithoutScroll(candidates[0]);
       keepInView(candidates[0]);
       return true;
     }
@@ -7352,7 +7388,7 @@
     }
 
     if (best) {
-      best.focus();
+      focusWithoutScroll(best);
       keepInView(best);
       return true;
     }
@@ -9346,8 +9382,15 @@
     event.preventDefault();
     event.stopPropagation();
     if (down) {
-      if (field.blur) field.blur();
-      focusNearest(key);
+      /* wychodzimy w pionie tak samo jak z listy wyboru: najpierw sąsiad, a gdy
+         natywne pole odda fokus z powrotem — zabieramy go i szukamy jeszcze raz;
+         na skraju formularza idziemy w drugą stronę, żeby ptaszka nie dało się
+         „zablokować” (na pilocie nie ma Tab) */
+      if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);
+      if (document.activeElement === field) {
+        if (field.blur) field.blur();
+        if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);
+      }
       return;
     }
     if (!event.repeat && field.click) field.click();

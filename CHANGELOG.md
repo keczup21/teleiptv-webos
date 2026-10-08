@@ -24,6 +24,15 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.28] — 2026-10-07
+
+### Dodano
+- **Program TV i lista programów odświeżają się same po dojściu EPG** — widok otwarty, zanim programy zdążyły się wczytać, wypełnia się teraz bez wychodzenia i wracania do niego.
+
+### Poprawiono
+- **Pola w ustawieniach puszczają pilota** — z pola z ptaszkiem, z pola do pisania i z listy wyboru wychodzi się w pionie do sąsiedniego wiersza (na skraju formularza w drugą stronę), więc żadne z nich nie zatrzymuje już nawigacji.
+- **Krok pilota nie szarpie kartą ustawień** — wyjście z przycisku albo pola dosuwa ekran tylko raz, bez dodatkowego zjazdu przeglądarki, więc karta nie zjeżdża niepotrzebnie w dół.
+
 ## [2.1.27] — 2026-10-07
 
 ### Poprawiono
