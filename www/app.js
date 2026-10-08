@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.21";
+  var APP_VERSION = "2.1.22";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -3249,7 +3249,7 @@
 
   /* ===============================  KANAŁY  =============================== */
 
-  function selectGroup(name, button) {
+  function selectGroup(name, button, keepFocus) {
     state.selectedGroup = name;
     var active = document.querySelectorAll(".category.active");
     for (var i = 0; i < active.length; i++) active[i].classList.remove("active");
@@ -3288,7 +3288,10 @@
     container.textContent = "";
     container.scrollTop = 0;
     bindListScroll();
-    renderListChunk(true);
+    /* Gdy lista rysuje się w trakcie pisania w polu szukania, nie zabieramy
+       fokusu do kanałów — na webOS klawiatura ekranowa oddaje fokus ciału
+       strony, więc bez tego pierwsza wpisana litera kończyła pisanie. */
+    renderListChunk(!keepFocus);
   }
 
   function renderListChunk(focusFirst) {
@@ -7228,20 +7231,32 @@
   }
 
   /* Tryb dzielony zmienia szerokość ekranu odtwarzacza (patrz body.player-epg),
-     a na webOS warstwa obrazu potrafi nie pójść za tą zmianą — obraz zostaje
-     czarny albo zwężony do starego rozmiaru. Wymuszamy ponowne złożenie klatki
-     klasą „video-layer-fix” (ten sam trik co przy braku obrazu w applyVideoLayerFix):
-     zakładamy ją na chwilę i wracamy do stanu z ustawień. */
+     a na webOS płaszczyzna obrazu nie idzie za tą zmianą — obraz zostaje czarny
+     (słychać tylko dźwięk), dopóki czegoś innego nie odświeży ekranu; dokładnie
+     to robiło ręczne przewinięcie listy programów pilotem. Wymuszamy więc sami
+     przebudowę płaszczyzny obrazu: chwilowe ukrycie i pokazanie elementu
+     (widoczność, nie „display” — odtwarzanie leci dalej) zmusza dekoder webOS do
+     złożenia klatki w nowym rozmiarze. Robimy to kilka razy po zmianie układu,
+     bo okno potrafi ułożyć się dopiero po paru klatkach. */
   function refreshVideoLayer() {
     if (!platformInfo || platformInfo.os !== "webos") return;
     if (!document.body || !document.body.classList) return;
-    var video = $("video");
-    if (!video) return;
-    document.body.classList.add("video-layer-fix");
-    void video.offsetWidth;
+    if (!$("video")) return;
+    repaintVideoLayer(40);
+    repaintVideoLayer(200);
+    repaintVideoLayer(500);
+  }
+
+  /* jedno „szturchnięcie” płaszczyzny obrazu w nowym rozmiarze */
+  function repaintVideoLayer(delay) {
     window.setTimeout(function () {
-      if (!settings.videoLayerFix) document.body.classList.remove("video-layer-fix");
-    }, 80);
+      var video = $("video");
+      if (!video || !video.parentNode) return;
+      video.style.visibility = "hidden";
+      void video.offsetWidth;
+      video.style.visibility = "";
+      void video.offsetWidth;
+    }, delay);
   }
 
   /* nawigacja pilotem: wybiera najbliższy element w kierunku strzałki */
@@ -9249,6 +9264,51 @@
     return !!state.mediaKeyAt && Date.now() - state.mediaKeyAt < 1200;
   }
 
+  /* webOS potrafi zjeść strzałki w natywnej liście <select> (i w polu z
+     ptaszkiem), zanim dojdzie do nasłuchu keydown w fazie bąbelkowania — pole
+     stawało się wtedy pułapką bez wyjścia, bo strzałki w ogóle do nas nie
+     docierały (patrz „pola formularza” niżej). Łapiemy je więc już w fazie
+     przechwytywania: ◀ ▶ zmieniają wartość listy, a ▲ ▼ wyprowadzają fokus do
+     sąsiedniego wiersza (albo kanału). stopPropagation() pilnuje, żeby obsługa
+     w bąbelkowaniu nie zadziałała drugi raz. */
+  function trapFormControlKey(event) {
+    var field = document.activeElement;
+    var tag = (field && field.tagName) || "";
+    if (tag !== "SELECT" && tag !== "INPUT") return;
+    var key = event.keyCode;
+    var across = key === 37 || key === 39 || key === 412 || key === 417;
+    var down = key === 38 || key === 40;
+    if (!across && !down) return;
+    if (tag === "SELECT") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (across) {
+        if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);
+        return;
+      }
+      if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);
+      /* natywna lista potrafi „odebrać” fokus z powrotem — jeśli został na niej,
+         zabieramy go i dopiero wtedy szukamy sąsiada (zapamiętane miejsce pola
+         prowadzi nawigację, patrz focusAnchor) */
+      if (document.activeElement === field) {
+        if (field.blur) field.blur();
+        if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);
+      }
+      return;
+    }
+    var type = String(field.getAttribute("type") || "text").toLowerCase();
+    if (type !== "checkbox" && type !== "radio") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (down) {
+      if (field.blur) field.blur();
+      focusNearest(key);
+      return;
+    }
+    if (!event.repeat && field.click) field.click();
+  }
+  document.addEventListener("keydown", trapFormControlKey, true);
+
   document.addEventListener("keydown", function (event) {
     var key = event.keyCode;
     /* W trybie dzielonym (obraz + EPG) klawisze obsługują listę programów po
@@ -9929,7 +9989,7 @@
   var orderReset = $("groupOrderReset");
   if (orderReset) orderReset.onclick = function () { resetGroupOrder(); };
   $("searchInput").oninput = function () {
-    selectGroup(state.selectedGroup, document.querySelector(".category.active"));
+    selectGroup(state.selectedGroup, document.querySelector(".category.active"), true);
   };
 
   bindVideoEvents($("video"));

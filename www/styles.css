@@ -525,6 +525,17 @@ body.video-layer-fix .player-screen video {
    MainActivity i VlcEngine w projekcie Androida). */
 body.player-epg #playerScreen { right: auto; width: 62%; }
 body.player-epg #archiveScreen { left: 62%; background: var(--bg); }
+/* Zwężenie ekranu odtwarzacza zmienia rozmiar płaszczyzny obrazu, a webOS sam
+   tego nie odświeża (obraz zostaje czarny, słychać tylko dźwięk). Na czas trybu
+   dzielonego obraz trzymamy więc na własnej warstwie compositingu, a app.js robi
+   jeszcze krótkie mrugnięcie widocznością, żeby dekoder złożył klatkę od nowa
+   (patrz refreshVideoLayer). */
+body.player-epg .player-screen video {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
 /* wąski albo pionowy ekran (telefon): nie dzielimy na siłę — lista programów
    zajmuje całość, tak jak było dotąd */
 @media (max-width: 900px) {

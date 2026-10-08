@@ -24,6 +24,13 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.22] — 2026-10-07
+
+### Poprawiono
+- **Tryb dzielony: transmisja zostaje widoczna po otwarciu EPG w odtwarzaczu** — webOS nie odświeżał płaszczyzny obrazu po zwężeniu ekranu, więc zostawało czarne tło z dźwiękiem; obraz jest teraz przebudowywany od razu, bez czekania na ruch pilotem.
+- **Lista playlisty w nagłówku nie jest już pułapką dla pilota** — na webOS natywna lista zjadała strzałki, zanim dochodziły do aplikacji; ▲ ▼ wychodzą teraz z listy do sąsiedniego wiersza (albo na kanały), a ◀ ▶ zmieniają playlistę.
+- **Pole „Szukaj” przyjmuje wpisywany tekst** — po wpisaniu znaku lista kanałów nie zabiera już fokusu do siebie (na webOS klawiatura ekranowa oddaje fokus ciału strony), więc pisanie nie kończy się na pierwszej literze.
+
 ## [2.1.21] — 2026-10-07
 
 ### Dodano

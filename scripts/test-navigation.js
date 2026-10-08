@@ -783,6 +783,24 @@ check("pole opuszcza sie tak samo jak reszta ustawien (sasiedni wiersz — focus
 check("pole szukania zostaje z wlasna droga (▼ do kanalow, ◀ ▶ na brzegach tekstu)",
   codeField.indexOf("searchArrowTarget(key, caret === 0, caretEnd === field.value.length)") > 0);
 
+/* webOS potrafi zjesc strzalki w natywnej liscie <select>, zanim dojda do
+   nasluchu keydown w fazie babelkowania — pole bylo wtedy pulapka bez wyjscia
+   (strzalki w ogole nie docieraly do aplikacji). Ten sam klawisz lapie osobny
+   nasluch w fazie przechwytywania, czyli zanim zrobi to natywna lista. */
+check("strzalki w natywnej liscie lapane juz w fazie przechwytywania (webOS)",
+  src.indexOf("function trapFormControlKey(event) {") > 0 &&
+  src.indexOf("document.addEventListener(\"keydown\", trapFormControlKey, true);") > 0 &&
+  src.indexOf("if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);") > 0 &&
+  src.indexOf('if (field.blur) field.blur();') > 0);
+
+/* Po wpisaniu znaku lista kanalow rysuje sie od nowa; na webOS klawiatura
+   ekranowa oddaje wtedy fokus cialu strony, wiec bez tego fokus uciekal do
+   kanalow i konczyl pisanie juz po pierwszej literze. */
+check("pole szukania nie traci fokusu, gdy lista rysuje sie w trakcie pisania",
+  src.indexOf("function selectGroup(name, button, keepFocus) {") > 0 &&
+  src.indexOf("renderListChunk(!keepFocus);") > 0 &&
+  src.indexOf('selectGroup(state.selectedGroup, document.querySelector(".category.active"), true);') > 0);
+
 check("Wstecz na polu ustawien konczy pisanie, a nie zamyka ustawien",
   src.indexOf("function backLeavesField() {") > 0 &&
   src.indexOf("if (backLeavesField()) return;") > 0 &&
