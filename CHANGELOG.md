@@ -24,6 +24,15 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.21] — 2026-10-07
+
+### Dodano
+- **Podpis „Program EPG” nad listą programów z paska odtwarzacza** — lista otwarta przyciskiem „EPG” dostaje na samej górze podpis, więc widać wprost, że to program oglądanego kanału, a nie archiwum z listy kanałów.
+
+### Poprawiono
+- **Pasek odtwarzacza zostaje na ekranie dłużej** — pasek informacyjny znika teraz sam po 20 s, a nie po 6 s, więc mini-EPG zdąży się przeczytać.
+- **Kolejne ⏩ w nagraniu przesuwają o pełne kroki** — skok liczy się od celu poprzedniego skoku, więc szybkie naciśnięcia pod rząd nie gubią już jednego kroku (silnik donosił przez chwilę pozycję sprzed skoku).
+
 ## [2.1.20] — 2026-10-07
 
 ### Poprawiono
