@@ -24,6 +24,11 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.33] — 2026-10-07
+
+### Poprawiono
+- **Przewijanie w przód na końcu programu nie cofa już obrazu** — okno archiwum sięga teraz do końca następnego programu z EPG, więc ⏩/⏪ oraz „Następny / Poprzedni” przechodzą między programami w tym samym strumieniu i trafiają dokładnie tam, gdzie wskazano, zamiast wczytywać następny program od jego początku (z widoczną przerwą).
+
 ## [2.1.32] — 2026-10-07
 
 ### Poprawiono
