@@ -787,7 +787,8 @@ if (fieldStart < 0 || fieldEnd <= fieldStart) {
 const codeField = src.slice(fieldStart, fieldEnd);
 check("pole z lista wyboru: ▲ ▼ wyprowadzaja fokus, a ◀ ▶ przewijaja pozycje",
   codeField.indexOf('if (fieldTag === "SELECT") {') > 0 &&
-  codeField.indexOf("if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);") > 0 &&
+  codeField.indexOf("var stepAcross = key === 37 || key === 412 ? -1 : 1;") > 0 &&
+  codeField.indexOf("if (!stepSelect(field, stepAcross)) {") > 0 &&
   codeField.indexOf('    if (fieldTag === "TEXTAREA") return;') > 0);
 check("pole z ptaszkiem: przelacza sie w bok (i OK), a w pionie opuszcza sie pole",
   codeField.indexOf('if (fieldType === "checkbox" || fieldType === "radio") {') > 0 &&
@@ -809,6 +810,18 @@ check("strzalki w natywnej liscie lapane juz w fazie przechwytywania (webOS)",
   src.indexOf("document.addEventListener(\"keydown\", trapFormControlKey, true);") > 0 &&
   src.indexOf("if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);") > 0 &&
   src.indexOf('if (field.blur) field.blur();') > 0);
+/* Na skraju listy wyboru (albo gdy ma tylko jedna pozycje, np. swiezy profil
+   „Nowa playlista”) krok ◀ ▶ nic nie zmienia. Faza przechwytywania zatrzymywala
+   wtedy zdarzenie i pole zostawalo bez wyjscia w bok — teraz brak kroku oznacza
+   wyjscie do sasiedniego przycisku (patrz tez galaz SELECT w keydown). */
+check("na skraju listy wyboru ◀ ▶ wychodza do sasiada (pole nie jest pulapka)",
+  src.indexOf("if (stepSelect(field, step)) return;") > 0 &&
+  src.indexOf("if (!stepSelect(field, stepAcross)) {") > 0);
+/* Przelaczenie typu zrodla ustawia pole pod nim, ale na telewizorze tylko je
+   podswietla — klawiature otwiera OK (patrz focusOrHighlight). */
+check("typ zrodla ustawia pole pod nim bez wyskakujacej klawiatury (focusOrHighlight)",
+  src.indexOf("function focusOrHighlight(element) {") > 0 &&
+  src.indexOf('if (type === "m3u-url") focusOrHighlight($("playlistUrl"));') > 0);
 /* Wyjscie z ptaszka (checkbox/radio) mialo tylko blur + szukanie sasiada: na skraju
    formularza (albo gdy natywne pole oddawalo fokus) zostawalo bez wyjscia. Teraz ma
    ten sam zapas co lista wyboru — najpierw sasiad, a potem druga strona. */
@@ -836,6 +849,12 @@ check("Wstecz na polu ustawien konczy pisanie, a nie zamyka ustawien",
   src.indexOf("function backLeavesField() {") > 0 &&
   src.indexOf("if (backLeavesField()) return;") > 0 &&
   src.indexOf('if ($("settingsScreen").classList.contains("hidden")) return false;') > 0);
+/* Wstecz zatrzymuje sie TYLKO przy polu do pisania (tam zamyka klawiature).
+   Lista wyboru i ptaszek klawiatury nie maja, wiec Wstecz ma z nich wyjsc z
+   ustawien — inaczej schodzil po kolei przez kazdy wiersz formularza (od
+   „Odswiezania EPG” az do „Zapisz i pobierz”). */
+check("Wstecz wychodzi z listy wyboru, a zostaje tylko przy polu do pisania",
+  src.indexOf('if (tag !== "TEXTAREA" && !isTextField(field)) return false;') > 0);
 check("pole w instrukcji opisuje nowe strzalki",
   html.indexOf('data-i18n="help_nav_fields"') > 0 && src.indexOf("help_nav_fields:") > 0);
 
@@ -861,6 +880,12 @@ check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
   const box = run(src.slice(at, stop), {
     document: { activeElement: field },
     $: function (id) { return id === "settingsScreen" ? settingsScreen : null; },
+    isTextField: function (el) {
+      if (!el || el.tagName !== "INPUT") return false;
+      var type = String((el.getAttribute && el.getAttribute("type")) || "text").toLowerCase();
+      return type !== "checkbox" && type !== "radio" && type !== "button" &&
+        type !== "submit" && type !== "range";
+    },
     focusNearest: function (key) { nearest.push(key); return moves; },
     focusSettingsTabs: function () { tabs++; }
   });
@@ -870,6 +895,14 @@ check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
     "blur: " + field.blurred + ", strzalki: " + nearest.join(",") + ", zakladki: " + tabs);
   box.document.activeElement = { tagName: "BODY" };
   check("Wstecz poza polem dziala jak dotad (ekran moze sie zamknac)",
+    box.backLeavesField() === false);
+  /* lista wyboru i ptaszek nie maja klawiatury, wiec Wstecz wychodzi z ustawien,
+     zamiast schodzic po kolei przez kazdy wiersz formularza */
+  box.document.activeElement = { tagName: "SELECT", blur: function () {} };
+  check("Wstecz na liscie wyboru wychodzi z ustawien (nie schodzi w dol)",
+    box.backLeavesField() === false);
+  box.document.activeElement = { tagName: "INPUT", type: "checkbox", getAttribute: function () { return "checkbox"; } };
+  check("Wstecz na ptaszku wychodzi z ustawien",
     box.backLeavesField() === false);
   /* ostatni wiersz formularza: nie ma juz na co przejsc, wiec zostaje pasek
      zakladek — ale ekran nadal sie nie zamyka */
@@ -920,7 +953,9 @@ check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
       box: { top: -500, left: 100, bottom: -442, right: 900, width: 800, height: 58 }
     },
     keepInView: function () {},
-    focusWithoutScroll: function (element) { if (element && element.focus) element.focus(); }
+    focusWithoutScroll: function (element) { if (element && element.focus) element.focus(); },
+    defersKeyboard: function () { return false; },
+    highlightField: function (element) { if (element && element.focus) element.focus(); }
   };
   const api = run(codeFocus, sandbox);
   api.focusNearest(40);
@@ -933,6 +968,25 @@ check("OK na gwiazdce ulubionych przelacza ulubione, a nie wlacza kanal",
     sandbox.document.activeElement === rowAbove,
     sandbox.document.activeElement && sandbox.document.activeElement.name);
 })();
+
+/* --- 13c. pole tekstowe na TV: fokus podświetla, klawiaturę otwiera OK ------
+   Na webOS samo dojechanie fokusem do pola tekstowego otwiera klawiaturę
+   ekranową, która przejmuje strzałki pilota: pola nie da się opuścić ani
+   dojechać do następnego wiersza. Teraz pole dostaje tylko podświetlenie
+   (klasa .nav-focus), a klawiaturę otwiera OK — daty/godzin nie ruszamy
+   (natywne okienko, nie klawiatura). */
+check("na TV pole tekstowe tylko się podświetla, a klawiaturę otwiera OK",
+  src.indexOf("function defersKeyboard(element) {") > 0 &&
+  src.indexOf("if (!isTvMode() || !isTextField(element)) return false;") > 0 &&
+  src.indexOf("if (defersKeyboard(best)) highlightField(best);") > 0 &&
+  src.indexOf("function highlightField(element) {") > 0 &&
+  src.indexOf('element.classList.add("nav-focus")') > 0);
+check("podświetlone pole: strzałki ruszają dalej, OK otwiera klawiaturę, Wstecz zdejmuje",
+  src.indexOf("if (pendingField && !inPlayer && !inPlayerEpg) {") > 0 &&
+  src.indexOf("if (pending.focus) pending.focus();") > 0);
+check("podświetlone pole ma własną obwódkę w CSS (inaczej fokus „znika”)",
+  css.indexOf("body.uimode-tv input.nav-focus {") > 0);
+
 
 /* --- 14. program TV: podpis „LIVE”, podświetlenie do catch-up, linia godziny --
    Program, który leci teraz, dostaje podpis „LIVE” i samą obwódkę akcentu,
@@ -1883,6 +1937,8 @@ function keyHarness(o) {
     },
     zapChannel: function (direction) { calls.zap.push(direction); },
     focusNearest: function (key) { calls.focus.push(key); return o.focusMoves !== false; },
+    pendingField: null,
+    clearPendingField: function () {},
     scheduleOsdHide: function () {},
     seekKeyDirection: function () { return 0; },
     mediaKeyAction: function () { return ""; },

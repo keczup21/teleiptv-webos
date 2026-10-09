@@ -1,6 +1,6 @@
 {
   "name": "teleiptv-webos",
-  "version": "2.1.29",
+  "version": "2.1.30",
   "private": true,
   "description": "TeleIPTV dla LG webOS (.ipk) - odtwarzacz IPTV na telewizor.",
   "engines": {

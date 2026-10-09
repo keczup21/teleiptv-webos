@@ -931,6 +931,15 @@ body.uimode-tv .channel:focus-within {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+/* Pole tekstowe, na którym stoi pilot (patrz highlightField): na TV nie ma
+   natywnego fokusu (klawiaturę otwiera dopiero OK), więc obwódkę rysujemy tą
+   samą klasą — bez tego po zjechaniu na pole podświetlenie „znikało”. */
+body.uimode-tv input.nav-focus {
+  border-color: transparent;
+  background: var(--surface-2);
+  outline: 4px solid var(--accent);
+  outline-offset: 2px;
+}
 /* Obwódka fokusu jest jedna, wokół całego kafelka kanału. Sam środek (nazwa
    kanału) i gwiazdka ulubionych dostawały wcześniej własną, drugą obwódkę
    — na telewizorze wyglądało to jak trzy osobne ramki w jednej. */

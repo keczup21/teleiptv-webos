@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.29";
+  var APP_VERSION = "2.1.30";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -1482,6 +1482,7 @@
 
   function showScreen(id) {
     exitPlayerEpg();
+    clearPendingField();
     if (id === "browserScreen") refreshRecentGroup();
     for (var i = 0; i < SCREENS.length; i++) {
       $(SCREENS[i]).classList.toggle("hidden", SCREENS[i] !== id);
@@ -7314,6 +7315,17 @@
     keepInView(element);
   }
 
+  /* Ustawienie pola po zmianie, której sami pilnujemy (np. przełączenie typu
+     źródła): na telewizorze pole tekstowe tylko podświetlamy, bo klawiaturę
+     ekranową otwiera dopiero OK (patrz highlightField) — inaczej samo
+     przełączenie typu listy wyskakiwałoby od razu z klawiaturą. Gdzie indziej
+     dajemy fokus od razu, jak dotąd. */
+  function focusOrHighlight(element) {
+    if (!element) return;
+    if (defersKeyboard(element)) highlightField(element);
+    else focusField(element);
+  }
+
   /* Tryb dzielony zmienia szerokość ekranu odtwarzacza (patrz body.player-epg),
      a na webOS płaszczyzna obrazu nie idzie za tą zmianą — obraz zostaje czarny
      (słychać tylko dźwięk), dopóki czegoś innego nie odświeży ekranu; dokładnie
@@ -7341,6 +7353,36 @@
       video.style.visibility = "";
       void video.offsetWidth;
     }, delay);
+  }
+
+  /* Na telewizorze samo dojechanie fokusem do pola tekstowego otwiera klawiaturę
+     ekranową, która przejmuje potem strzałki pilota: pola nie da się ani opuścić,
+     ani dojechać do kolejnego wiersza (patrz „pola formularza”). Dlatego pole
+     tylko podświetlamy, a klawiaturę otwiera dopiero OK (patrz keydown).
+     Daty/godziny nie ruszamy — one otwierają natywne okienko, nie klawiaturę. */
+  var pendingField = null;
+
+  function defersKeyboard(element) {
+    if (!isTvMode() || !isTextField(element)) return false;
+    var type = String((element.getAttribute && element.getAttribute("type")) || "text").toLowerCase();
+    return type === "" || type === "text" || type === "url" || type === "password" ||
+      type === "search" || type === "email" || type === "tel" || type === "number";
+  }
+
+  function highlightField(element) {
+    var active = document.activeElement;
+    if (active && active !== element && active.blur) active.blur();
+    element.classList.add("nav-focus");
+    pendingField = element;
+    focusAnchor = { el: element, box: element.getBoundingClientRect() };
+    keepInView(element);
+  }
+
+  function clearPendingField() {
+    if (pendingField) {
+      if (pendingField.classList) pendingField.classList.remove("nav-focus");
+      pendingField = null;
+    }
   }
 
   /* nawigacja pilotem: wybiera najbliższy element w kierunku strzałki */
@@ -7374,8 +7416,9 @@
     }
 
     if (!box || (!box.width && !box.height)) {
-      focusWithoutScroll(candidates[0]);
-      keepInView(candidates[0]);
+      var fallback = candidates[0];
+      if (defersKeyboard(fallback)) highlightField(fallback);
+      else { focusWithoutScroll(fallback); keepInView(fallback); }
       return true;
     }
 
@@ -7412,8 +7455,8 @@
     }
 
     if (best) {
-      focusWithoutScroll(best);
-      keepInView(best);
+      if (defersKeyboard(best)) highlightField(best);
+      else { focusWithoutScroll(best); keepInView(best); }
       return true;
     }
     /* brak kandydata w tym kierunku — wywołujący wie, że fokus stoi w miejscu
@@ -9125,17 +9168,23 @@
     else if (currentScreenId() === "playerScreen") toggleOsd();
   }
 
-  /* Wstecz na polu formularza w ustawieniach: kończy tylko pisanie w polu
+  /* Wstecz na polu do pisania w ustawieniach: kończy tylko pisanie w polu
      (blur zamyka klawiaturę ekranową) i przenosi fokus na sąsiedni wiersz, więc
      ekran zostaje ten sam. Wcześniej fokus szedł na pasek zakładek — z pola
      linku EPG, które leży nisko w długiej karcie ustawień, ekran zjeżdżał wtedy
      na sam jej początek, a podświetlenie lądowało poza wierszem, z którego
-     przyszło (patrz focusNearest). Zwraca true, gdy zdarzenie zostało zużyte. */
+     przyszło (patrz focusNearest). Zwraca true, gdy zdarzenie zostało zużyte.
+     Zatrzymujemy Wstecz TYLKO przy polu do pisania — listy wyboru i ptaszki
+     klawiatury nie otwierają, więc Wstecz ma z nich po prostu wyjść z ustawień;
+     gdy zatrzymywał go każdy wiersz, Wstecz schodził po kolei przez cały
+     formularz (od „Odświeżania EPG” aż do „Zapisz i pobierz”) zamiast zamknąć
+     ekran. */
   function backLeavesField() {
     if ($("settingsScreen").classList.contains("hidden")) return false;
     var field = document.activeElement;
     var tag = (field && field.tagName) || "";
     if (tag !== "INPUT" && tag !== "SELECT" && tag !== "TEXTAREA") return false;
+    if (tag !== "TEXTAREA" && !isTextField(field)) return false;
     if (field.blur) field.blur();
     /* ▼ zostawia pole tak, jakby użytkownik nacisnął strzałkę w dół — to jedyny
        ruch, który zamyka klawiaturę i nie gubi miejsca w formularzu; gdy niżej
@@ -9302,6 +9351,9 @@
   document.addEventListener("focusin", function (event) {
     var element = event.target;
     if (!element || !element.getBoundingClientRect) return;
+    /* fokus wszedł gdzie indziej (myszka, programowe ustawienie) — zdejmij
+       podświetlenie pola tekstowego z pilota (patrz highlightField) */
+    if (pendingField && event.target !== pendingField) clearPendingField();
     var box = element.getBoundingClientRect();
     if (!box.width && !box.height) return;
     focusAnchor = { el: element, box: box };
@@ -9388,7 +9440,15 @@
       event.preventDefault();
       event.stopPropagation();
       if (across) {
-        if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);
+        if (event.repeat) return;
+        /* ◀ ▶ przewijają pozycje listy bez rozwijania systemowego okna; gdy to
+           skraj (albo lista ma jedną pozycję), krok nic nie zmienia — wtedy
+           wychodzimy w bok jak z każdego innego wiersza, żeby pole nie było
+           pułapką (pilot nie ma Tab, patrz też gałąź SELECT w keydown). */
+        var step = key === 37 || key === 412 ? -1 : 1;
+        if (stepSelect(field, step)) return;
+        var side = step < 0 ? 37 : 39;
+        if (!focusNearest(side)) focusNearest(side === 37 ? 39 : 37);
         return;
       }
       if (!focusNearest(key)) focusNearest(key === 40 ? 38 : 40);
@@ -9430,6 +9490,43 @@
       document.body.classList.contains("player-epg"));
     var inPlayer = !inPlayerEpg && !$("playerScreen").classList.contains("hidden");
     var inGuide = !$("guideScreen").classList.contains("hidden");
+
+    /* Pole tekstowe tylko podświetlone fokusem pilota (patrz highlightField): na
+       telewizorze klawiaturę ekranową otwiera dopiero OK, a strzałki od razu
+       ruszają dalej — inaczej natywna klawiatura przejmuje pilota i pola nie da
+       się ani opuścić, ani dojechać do następnego wiersza. */
+    if (pendingField && !inPlayer && !inPlayerEpg) {
+      var pending = pendingField;
+      if (key === 13 || key === 23 || key === 66) {
+        event.preventDefault();
+        if (event.repeat) return;
+        clearPendingField();
+        if (pending.focus) pending.focus();
+        return;
+      }
+      if (key === 461 || key === 4) {
+        event.preventDefault();
+        clearPendingField();
+        return;
+      }
+      if (key >= 37 && key <= 40 || key === 412 || key === 417) {
+        event.preventDefault();
+        if (event.repeat) return;
+        if (pending === $("searchInput") && key === 40) {
+          clearPendingField();
+          focusChannelEntry();
+          return;
+        }
+        if (pending === $("searchInput") && key === 37) {
+          clearPendingField();
+          focusActiveCategory();
+          return;
+        }
+        clearPendingField();
+        focusNearest(key);
+        return;
+      }
+    }
 
     /* Wstecz (webOS 461, Android 4): najpierw zamyka nakładki */
     if (key === 461 || key === 4) {
@@ -9635,10 +9732,17 @@
         if (!moved) moved = focusNearest(key === 40 ? 38 : 40);
         return;
       }
-      /* ◀ ▶ przewijają pozycje bez rozwijania systemowego okna */
+      /* ◀ ▶ przewijają pozycje bez rozwijania systemowego okna; na skraju listy
+         krok nic nie zmienia, więc wychodzimy w bok jak z każdego innego
+         wiersza — inaczej pole zostawało pułapką (pilot nie ma Tab) */
       if (fieldAcross) {
         event.preventDefault();
-        if (!event.repeat) stepSelect(field, key === 37 || key === 412 ? -1 : 1);
+        if (event.repeat) return;
+        var stepAcross = key === 37 || key === 412 ? -1 : 1;
+        if (!stepSelect(field, stepAcross)) {
+          var sideAcross = stepAcross < 0 ? 37 : 39;
+          if (!focusNearest(sideAcross)) focusNearest(sideAcross === 37 ? 39 : 37);
+        }
         return;
       }
       return;   /* OK rozwija listę (długa lista godzin EPG jest wygodniejsza w oknie) */
@@ -9891,8 +9995,8 @@
   $("sourceType").onchange = function () {
     updateSourceSections();
     var type = $("sourceType").value;
-    if (type === "xtream") focusField($("xtreamServer"));
-    else if (type === "m3u-url") focusField($("playlistUrl"));
+    if (type === "xtream") focusOrHighlight($("xtreamServer"));
+    else if (type === "m3u-url") focusOrHighlight($("playlistUrl"));
   };
 
   $("language").onchange = function () {

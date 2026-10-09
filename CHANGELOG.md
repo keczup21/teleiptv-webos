@@ -24,6 +24,13 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.30] — 2026-10-07
+
+### Poprawiono
+- **Pole tekstowe w ustawieniach i w wyszukiwaniu nie blokuje już pilota** — na telewizorze samo dojechanie fokusem do pola otwierało klawiaturę ekranową, która przejmowała potem strzałki i nie dawała się opuścić ani dojechać do kolejnego wiersza, więc teraz pole tylko się podświetla, a klawiaturę otwiera OK (Wstecz zamyka pisanie, nie ruszając ekranu)
+- **Lista wyboru na skraju puszcza pilota w bok** — gdy nie ma już czego przewijać (np. nowy profil „Nowa playlista”), ◀ ▶ wychodzą z listy do sąsiedniego przycisku zamiast zostawiać tam fokus
+- **Wstecz w ustawieniach wychodzi z ekranu z każdego wiersza poza polem do pisania** — na liście wyboru (np. „Odświeżanie EPG”) i ptaszku Wstecz zamyka ustawienia od razu, a nie przesuwa fokusu po kolei przez wszystkie wiersze do „Zapisz i pobierz”
+
 ## [2.1.29] — 2026-10-07
 
 ### Dodano
