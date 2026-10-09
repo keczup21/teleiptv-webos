@@ -2215,7 +2215,7 @@ function pictureHarness(o) {
      musi być w rękach testu (patrz streamStillComing w app.js). */
   let clock = typeof o.nowMs === "number" ? o.nowMs : Date.now();
   const sandbox = {
-    settings: { videoLayerFix: o.layerFix === true, engineHint: "" },
+    settings: { videoLayerFix: o.layerFix === true, engineHint: "", feederSources: [] },
     state: {
       watchChannel: { name: "TVN" },
       engineToken: 7,
@@ -2235,7 +2235,9 @@ function pictureHarness(o) {
          liczy się twardy budżet „dźwięk bez obrazu” (AUDIO_ONLY_TIMEOUT) */
       audioStartedAt: o.audioStartedAt === undefined ? 0 : o.audioStartedAt,
       sources: o.sources || [{ engine: "native", url: "http://s/x.ts" }, { engine: "mse", url: "http://s/x.ts" }],
-      sourceIndex: o.sourceIndex === undefined ? 0 : o.sourceIndex
+      sourceIndex: o.sourceIndex === undefined ? 0 : o.sourceIndex,
+      /* adres odtwarzanej próby — pamięć czytnika playlisty zapisuje właśnie jego */
+      currentSource: o.currentSource || ""
     },
     t: function (key) { return "<" + key + ">"; },
     $: function (id) { return id === "video" ? video : null; },
@@ -2333,6 +2335,19 @@ ph = pictureHarness({ engine: "mse" });
 check("uruchomione: bez obrazu tryb nie trafia do pamieci (MSE sam nie dostaje pochwaly)",
   ph.api.notePicture() === false && ph.api.settings.engineHint === "" && ph.calls.saves === 0,
   JSON.stringify({ hint: ph.api.settings.engineHint, saves: ph.calls.saves }));
+
+/* Kanał z playlisty: gdy obraz dał własny czytnik (MSE + „hls: true”), sam
+   adres idzie do pamięci. Kanał natywnie i przez hls.js kończył się błędem za
+   każdym razem, więc przy następnym wejściu wraca do czytnika od razu — patrz
+   rememberEngine, sourceHint w app.js. */
+ph = pictureHarness({ picture: true, engine: "mse", engineFeeder: true,
+  currentSource: "http://s/x.m3u8" });
+ph.api.notePicture();
+check("uruchomione: udany czytnik playlisty zapamietuje adres kanalu",
+  ph.calls.saves === 1 && ph.api.settings.feederSources.length === 1 &&
+  ph.api.settings.feederSources[0] === "http://s/x.m3u8" &&
+  ph.api.settings.engineHint === "",
+  JSON.stringify({ sources: ph.api.settings.feederSources, hint: ph.api.settings.engineHint }));
 
 /* 4K: pierwsze klatki potrzebuja wiecej czasu, wiec dopoki strumien naprawde
    cos dociaga, proba jest przedluzana — restart co 6 s nie dawal obrazu nigdy */
@@ -2778,6 +2793,23 @@ queueBox.settings.engineHint = "bogus";
 check("uruchomione: nieznana pamiec nic nie psuje",
   engines("http://s/x.ts").join(",") === qPlain.join(","), JSON.stringify(engines("http://s/x.ts")));
 queueBox.settings.engineHint = "";
+/* Kanał z playlisty, który obraz dał dopiero przez własny czytnik, wraca do
+   niego od razu przy kolejnym wejściu. Bez tego znowu zaczynał od natywnego
+   dekodera i hls.js — a one kończyły się błędem (DEMUXER_ERROR_COULD_NOT_OPEN,
+   mediaError/fragParsingError), zanim kanał dotarł do czytnika. Pamięć trzyma
+   sam adres kanału, więc nie ciągnie do czytnika innych (patrz rememberEngine,
+   sourceHint w app.js). */
+queueBox.settings.feederSources = ["http://s/x.m3u8"];
+const qFeeder = queueBox.buildSourceQueue("http://s/x.m3u8");
+check("uruchomione: kanal z playlisty wraca od razu do czytnika (zapamietany adres)",
+  qFeeder.map(function (e) { return e.engine; }).join(",") === "mse,native,hls" &&
+  qFeeder[0].hls === true && qFeeder[0].url === "http://s/x.m3u8" && qFeeder.length === 3,
+  JSON.stringify(qFeeder.map(function (e) { return e.engine + (e.hls ? ":feeder" : ""); })));
+check("uruchomione: zapamietany czytnik nie ciagnie innych kanalow",
+  engines("http://s/x.ts").join(",") === qPlain.join(",") &&
+  engines("http://s/y.m3u8").join(",") === "native,hls,mse",
+  JSON.stringify(engines("http://s/y.m3u8")));
+queueBox.settings.feederSources = [];
 /* Kanał na żywo w aplikacji na Androidzie idzie najpierw do odtwarzacza odbiornika
    (ExoPlayer) — to on rozbiera TS i HLS sprzętowo, więc tylko on daje 4K bez
    zrywania (patrz startExoSource). Gdy zawiedzie, kolejka idzie dalej jak dotąd. */
@@ -3703,7 +3735,8 @@ check("VLC: archiwum idzie silnikiem, a skok o krok jego zegarem",
   src.indexOf("if (state.isArchive && vlcActive() && state.vlcLength > 0) {") > 0 &&
   src.indexOf("function seekArchiveHardware(direction, step) {") > 0 &&
   src.indexOf("if (nativeLayerActive()) {\n      seekArchiveHardware(direction, step);") > 0 &&
-  src.indexOf("return preferEngine(hardware.concat(browser), settings.engineHint);") > 0 &&
+  src.indexOf("return preferEngine(hardware.concat(browser), sourceHint(primaryUrl));") > 0 &&
+  src.indexOf("function sourceHint(primaryUrl) {") > 0 &&
   src.indexOf("function archiveProgramSeconds() {") > 0);
 
 /* Zachowanie drogi natywnej, nie tylko obecność kodu: atrapa mostu (Java) + atrapa
@@ -3783,7 +3816,10 @@ function exoHarness(o) {
     scheduleOsdHide: function () {},
     clearStartWatchdog: function () { sandbox.state.startTimer = null; },
     setTimeout: function (fn) { calls.timers.push(fn); return calls.timers.length; },
-    clearTimeout: function () {}
+    clearTimeout: function () {},
+    /* automatyczne przejscie na koniec programu (patrz rollArchiveAtEnd w app.js):
+       w tym teście zdarzenia silnika nie niosą oglądanego programu, więc atrapa */
+    rollArchiveAtEnd: function () { return false; }
   };
   /* window to ten sam obiekt co zbiór zmiennych globalnych: tak działa i most, i
      zdarzenie window.__openiptvNativeEvent, które app.js na nim zapisuje */
@@ -3995,7 +4031,10 @@ function vlcHarness(o) {
     clearVideoQuietly: function () {
       calls.videoPaused = true;
       calls.videoCleared = true;
-    }
+    },
+    /* automatyczne przejscie na koniec programu (patrz rollArchiveAtEnd w app.js):
+       w tym teście zdarzenia silnika nie niosą oglądanego programu, więc atrapa */
+    rollArchiveAtEnd: function () { return false; }
   };
   sandbox.window = sandbox;
   run(vlcCode, sandbox);

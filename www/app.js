@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.30";
+  var APP_VERSION = "2.1.31";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -153,6 +153,14 @@
        (patrz seekAnchorMs) */
     vlcPendingSeek: 0,
     vlcPendingAt: 0,
+    /* chwila ostatniego automatycznego przejścia do następnego programu (patrz
+       rollArchiveAtEnd) — nowe okno ładuje się chwilę, więc przez ten czas nie
+       patrzymy znów na koniec, żeby nie przeskoczyć o program za daleko */
+    rollAt: 0,
+    /* cofnięto na koniec poprzedniego programu (patrz stepToNeighbor): takie
+       okno otwiera się na swoim końcu i nie przeskakuje od razu w przód, żeby
+       „wstecz” biegło dalej w tył, a nie odbijało z powrotem */
+    rewindEnd: false,
     osdTicker: null,
     /* Pasek otwarty klawiszem OK / dotknięciem to menu: ▲ ▼ chodzą wtedy po jego
        przyciskach („Pauza”, „EPG”, …), a nie po kanałach. Pasek pokazany przy
@@ -320,6 +328,12 @@
        Dzięki temu dekoder, który oddaje sam dźwięk, nie jest próbowany
        od nowa przy każdym kanale. */
     engineHint: "",
+    /* Adresy kanałów z playlisty, które obraz dały dopiero przez własny czytnik
+       HLS→TS (MSE + „hls: true”). Taki kanał natywnie i przez hls.js kończył się
+       błędem, zanim dotarł do czytnika (DEMUXER_ERROR_COULD_NOT_OPEN, a potem
+       mediaError/fragParsingError), więc wraca do niego od razu — patrz
+       rememberEngine(). Lista jest krótka (starsze wpisy wypadają). */
+    feederSources: [],
     /* Naprawa warstwy obrazu dla Androidów, które grają dźwięk bez klatki —
        patrz applyVideoLayerFix(). Włącza się tylko wtedy, gdy naprawdę pomogła. */
     videoLayerFix: false,
@@ -4030,9 +4044,19 @@
          zdekodował ją później) — dlatego budzik obrazu sprawdzamy też tutaj. */
       notePicture();
       updateOsdProgress();
+      /* program dobiegł końca z EPG — w archiwum przechodzimy do następnego */
+      rollArchiveAtEnd(false);
+    });
+    video.addEventListener("ended", function () {
+      /* materiał oddany przez serwer dobiegł końca — jak wyżej (bez patrzenia na
+         pozycję, bo to sam koniec strumienia) */
+      rollArchiveAtEnd(true);
     });
     video.addEventListener("loadedmetadata", function () {
       noteStreamActivity();
+      /* cofnięty program otwiera się na swoim końcu — znamy już długość okna,
+         więc przeskakujemy przed koniec programu z EPG (patrz stepToNeighbor) */
+      if (state.rewindEnd) seekToProgramEnd();
       /* Metadane mówią, jaka to rozdzielczość — od tego momentu wiemy, czy kanał
          jest 4K. Taki kanał wraca do tego, jak grał, zanim aplikacja zaczęła się
          uczyć silników: bez wymuszonej warstwy obrazu i ze sprzętowym dekoderem
@@ -5799,7 +5823,12 @@
       updateOsd();
       return;
     }
-    if (type === "buffering" || type === "ended") return;
+    if (type === "buffering") return;
+    if (type === "ended") {
+      /* koniec nagrania — idziemy do następnego programu (patrz rollArchiveAtEnd) */
+      rollArchiveAtEnd(true);
+      return;
+    }
     if (type === "error") {
       handlePlaybackError(t("err_stream") + " (" + engineName("exo") +
         (event.message ? ": " + String(event.message).slice(0, 120) : "") + ")");
@@ -5995,6 +6024,16 @@
     if (type === "time") {
       state.vlcTime = Math.max(0, event.time | 0);
       if ((event.length | 0) > 0) state.vlcLength = event.length | 0;
+      /* cofnięty program otwiera się na swoim końcu — pierwszy raz, gdy znamy
+         długość okna, przeskakujemy przed koniec programu z EPG (patrz
+         stepToNeighbor i seekToProgramEnd) */
+      if (state.rewindEnd && state.vlcLength > 0 &&
+          (state.vlcTime | 0) < Math.min(state.vlcLength, archiveProgramSeconds() * 1000) - 2000) {
+        seekToProgramEnd();
+      }
+      /* program dobiegł końca z EPG — automatyczne przejście do następnego
+         (patrz rollArchiveAtEnd) */
+      rollArchiveAtEnd(false);
       return;
     }
     if (type === "size") {
@@ -6033,7 +6072,12 @@
       updateOsd();
       return;
     }
-    if (type === "buffering" || type === "ended" || type === "stopped") return;
+    if (type === "buffering" || type === "stopped") return;
+    if (type === "ended") {
+      /* koniec nagrania — idziemy do następnego programu (patrz rollArchiveAtEnd) */
+      rollArchiveAtEnd(true);
+      return;
+    }
     if (type === "error") {
       handlePlaybackError(t("err_stream") + " (" + engineName("vlc") +
         (event.message ? ": " + String(event.message).slice(0, 120) : "") + ")");
@@ -6114,8 +6158,20 @@
        zapasy: gdy silnik nie da obrazu, nextSourceEntry() sam przechodzi do
        następnej drogi — nie trzeba nic zaznaczać w ustawieniach ani przestawiać
        ręcznie. */
-    if (!hardware.length) return preferEngine(browser, settings.engineHint);
-    return preferEngine(hardware.concat(browser), settings.engineHint);
+    if (!hardware.length) return preferEngine(browser, sourceHint(primaryUrl));
+    return preferEngine(hardware.concat(browser), sourceHint(primaryUrl));
+  }
+
+  /* Zapamiętany sposób odtwarzania dla tego kanału. Domyślnie jest to ogólna
+     pamięć ustawień („native” / „mse” / „hls”), ale kanał z playlisty, który
+     obraz dał dopiero przez własny czytnik (patrz rememberEngine), dostaje
+     własny znacznik „feeder” — wtedy wraca do czytnika od razu, bez powtarzania
+     kaskady błędów natywnego dekodera i hls.js. */
+  function sourceHint(primaryUrl) {
+    if (Array.isArray(settings.feederSources) && settings.feederSources.indexOf(primaryUrl) >= 0) {
+      return "feeder";
+    }
+    return settings.engineHint;
   }
 
   /* Zapamiętany sposób odtwarzania idzie na początek kolejki. Jeśli telewizor
@@ -6130,25 +6186,33 @@
      rozbierze. Pamięć po innym kanale nie może więc wypychać go przed adres,
      który dla tego kanału naprawdę działa.
 
-     Wyjątkiem jest czytnik playlisty (wpis z „hls: true”): on zostaje tam,
-     gdzie go postawiono, czyli na końcu kolejki — patrz niżej. */
+     Wyjątkiem jest czytnik playlisty (wpis z „hls: true”): normalnie zostaje
+     tam, gdzie go postawiono, czyli na końcu kolejki. Wychodzi na czoło tylko
+     wtedy, gdy jego adres jest zapamiętany jako taki, który obraz dał właśnie
+     przez niego (znacznik „feeder” — patrz sourceHint, rememberEngine); wtedy
+     kanał od razu idzie czytnikiem, zamiast powtarzać błędy natywnego dekodera
+     i hls.js. */
   function preferEngine(queue, hint) {
-    if (hint !== "mse" && hint !== "hls") return queue;
+    if (hint !== "mse" && hint !== "hls" && hint !== "feeder") return queue;
     /* Droga sprzętowa (VLC albo odtwarzacz systemowy) zostaje na czele kolejki:
        to nie jest „sposób odtwarzania”, który można zapamiętać i przeskoczyć —
        a gdy nie da obrazu, kolejka idzie dalej jak dotąd (patrz buildSourceQueue). */
     if (queue[0] && (queue[0].engine === "exo" || queue[0].engine === "vlc")) return queue;
     for (var i = 1; i < queue.length; i++) {
-      /* Czytnik playlisty (wpis z „hls: true”) zostaje na końcu kolejki. Z
-         nazwy wygląda jak zwykłe MSE, więc zapamiętany MSE wybierał właśnie
-         jego — ale to zupełnie inna droga: sam pobiera odcinki playlisty i
-         trzyma kilkanaście sekund obrazu przed odtwarzaniem. Kanał nadawany
-         zwykłym strumieniem gra lepiej natywnie albo przez HLS, a dla kanału
-         z playlisty ta próba i tak jest ostatnia — dzięki temu zapamiętany
-         sposób odtwarzania nie ciągnie do czytnika każdego kanału z playlisty
-         (także tych HD, które nie mają z HEVC nic wspólnego). */
-      if (queue[i].hls) continue;
-      if (queue[i].engine === hint && queue[i].url === queue[0].url) {
+      /* Czytnik playlisty (wpis z „hls: true”) to jedyny wpis, który normalnie
+         zostaje na końcu kolejki. Z nazwy wygląda jak zwykłe MSE, więc
+         zapamiętany MSE wybierał właśnie jego — ale to zupełna inna droga: sam
+         pobiera odcinki playlisty i trzyma kilkanaście sekund obrazu przed
+         odtwarzaniem. Kanał nadawany zwykłym strumieniem gra lepiej natywnie
+         albo przez HLS, a dla kanału z playlisty ta próba i tak jest ostatnia —
+         dzięki temu zapamiętany sposób odtwarzania nie ciągnie do czytnika
+         każdego kanału z playlisty (także tych HD, które nie mają z HEVC nic
+         wspólnego). Wyjątkiem jest znacznik „feeder”: wtedy chcemy właśnie tego
+         wpisu (patrz sourceHint). */
+      var wanted = hint === "feeder"
+        ? (queue[i].engine === "mse" && queue[i].hls === true)
+        : (queue[i].hls !== true && queue[i].engine === hint);
+      if (wanted && queue[i].url === queue[0].url) {
         var entry = queue.splice(i, 1)[0];
         queue.unshift(entry);
         break;
@@ -6508,9 +6572,33 @@
     return true;
   }
 
+  /* Ile adresów kanałów z playlisty pamiętamy jako „przez czytnik”. Krótka
+     lista wystarczy: liczy się to, żeby wracać od razu do kanałów oglądanych
+     ostatnio, a nie trzymać cały bukiet na zawsze. */
+  var FEEDER_SOURCES_LIMIT = 40;
+
   /* Udany sposób odtwarzania pamiętamy między kanałami (patrz preferEngine).
-     Zapis jest odroczony, bo to zwykłe ustawienie — nie może zatrzymać obrazu. */
+     Zapis jest odroczony, bo to zwykłe ustawienie — nie może zatrzymać obrazu.
+
+     Osobno traktujemy czytnik playlisty (MSE + własny czytnik HLS→TS, używany,
+     gdy dało obraz przy „hls: true”): to zupełnie inna droga niż zwykłe MSE, a
+     kanał nadawany playlistą natywnie i przez hls.js kończył się błędem za
+     każdym razem, zanim do niego dotarł. Zapamiętujemy więc sam adres kanału,
+     który przez czytnik dał obraz — od teraz wraca do niego od razu (patrz
+     sourceHint), bez powtarzania kaskady błędów. */
   function rememberEngine(engine) {
+    if (engine === "mse" && state.engineFeeder) {
+      var url = state.currentSource;
+      if (!url) return;
+      var sources = settings.feederSources;
+      if (!Array.isArray(sources)) sources = settings.feederSources = [];
+      var at = sources.indexOf(url);
+      if (at >= 0) sources.splice(at, 1);
+      sources.unshift(url);
+      if (sources.length > FEEDER_SOURCES_LIMIT) sources.length = FEEDER_SOURCES_LIMIT;
+      saveSettings();
+      return;
+    }
     var hint = engine === "mse" || engine === "hls" ? engine : "native";
     if (settings.engineHint === hint) return;
     settings.engineHint = hint;
@@ -7001,6 +7089,128 @@
     return Math.max(0, (Math.min(program.end, Date.now()) - program.start) / 1000);
   }
 
+  /* Sąsiedni program tego samego kanału w EPG — poprzedni (−1) albo następny
+     (+1) względem oglądanego programu (state.watchProgram). Bierzemy tylko te,
+     które już się zaczęły (start <= teraz), bo materiał, który dopiero będzie,
+     nie ma catch-upu — dzięki temu „następny” trafia też w program lecący teraz
+     (zwykle to on idzie po zakończonym nagraniu). Zwraca null, gdy w tę stronę
+     nie ma już nic (początek/koniec archiwum dostawcy). */
+  function neighborProgram(direction) {
+    var channel = state.watchChannel;
+    var current = state.watchProgram;
+    if (!channel || !current) return null;
+
+    var now = Date.now();
+    var list = programsFor(channel).filter(function (program) {
+      return program.end > program.start && program.start <= now;
+    });
+    list.sort(function (a, b) { return a.start - b.start; });
+    if (!list.length) return null;
+
+    /* programy liczymy po czasie startu, więc oglądany program (i jego sąsiad)
+       znajdują się jednoznacznie nawet przy zdublowanych godzinach */
+    var index = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].start <= current.start) index = i;
+      else break;
+    }
+    return list[index + direction] || null;
+  }
+
+  /* Przejście na sąsiedni program z EPG: zwraca true, gdy było na co przejść.
+     Używa tego przewijanie na granicy okna (seekBy, seekArchiveHardware) oraz
+     przyciski „Poprzedni / Następny” w pasku (watchProgramStep). */
+  function stepToNeighbor(direction) {
+    var target = neighborProgram(direction);
+    if (!target) return false;
+    playChannel(state.watchChannel, target, "playerScreen");
+    if (direction < 0) {
+      /* „wstecz”: poprzedni program otwiera się na swoim końcu, a nie od
+         początku — dzięki temu cofanie biegnie dalej w tył, a obraz nie
+         przeskakuje zaraz z powrotem w przód (patrz seekToProgramEnd
+         i rollArchiveAtEnd) */
+      state.rollAt = Date.now();
+      state.rewindEnd = true;
+    } else {
+      state.rewindEnd = false;
+    }
+    return true;
+  }
+
+  /* Otwarcie cofniętego programu na jego końcu: nowe okno ładuje się od zera,
+     więc gdy tylko znamy jego długość, przeskakujemy na chwilę przed koniec
+     programu z EPG. Dzięki temu „poprzedni” ląduje tam, gdzie program się
+     kończy — i od tego miejsca ⏪ cofa dalej w tył. Wywołują to zdarzenie
+     metadanych <video> (loadedmetadata) i zegar silnika VLC (vlcEvent), gdy
+     staną się znane pozycja i długość okna. */
+  function seekToProgramEnd() {
+    var programSeconds = archiveProgramSeconds();
+    if (programSeconds <= 0) return false;
+    if (nativeLayerActive()) {
+      if (state.vlcLength <= 0) return false;
+      var limitMs = Math.min(state.vlcLength, programSeconds * 1000);
+      var target = Math.max(0, limitMs - 1000);
+      if (!vlcSeek(target)) return false;
+      /* silnik donosi jeszcze starą pozycję — zapamiętujemy cel skoku */
+      state.vlcPendingSeek = target;
+      state.vlcPendingAt = Date.now();
+      updateOsdProgress();
+      return true;
+    }
+    var video = $("video");
+    if (!video || !isFinite(video.duration) || video.duration <= 0) return false;
+    video.currentTime = Math.max(0, Math.min(video.duration, programSeconds) - 1);
+    return true;
+  }
+
+  /* Czy odtwarzane okno archiwum dobiegło końca? Pytają o to przewijanie na
+     granicy (seekBy) i automatyczne przejście (rollArchiveAtEnd). Pozycję i
+     długość bierze się z elementu <video> albo z zegara silnika (patrz vlcEvent).
+     Okno przycinamy do granicy programu z EPG (patrz archiveProgramSeconds). */
+  function archiveAtProgramEnd() {
+    if (!state.isArchive || atLiveEdge()) return false;
+    var programSeconds = archiveProgramSeconds();
+    if (programSeconds <= 0) return false;
+    if (nativeLayerActive()) {
+      if (state.vlcLength <= 0) return false;
+      var limitMs = Math.min(state.vlcLength, programSeconds * 1000);
+      return (state.vlcTime | 0) >= limitMs - 500;
+    }
+    var video = $("video");
+    if (!video || !isFinite(video.duration) || video.duration <= 0) return false;
+    var limit = Math.min(video.duration, programSeconds);
+    return video.currentTime >= limit - 0.5;
+  }
+
+  /* Ile czekamy po przejściu, zanim znów patrzymy na koniec programu — nowe okno
+     ładuje się chwilę i przez ten czas silnik donosi jeszcze starą pozycję; bez
+     tej zwłoki przejście wskoczyłoby o dwa programy dalej naraz. */
+  var ROLL_SETTLE = 4000;
+
+  /* Automatyczne przejście do następnego programu z EPG, gdy odtwarzany program
+     dobiegł końca — „płynnie”, bez czekania, aż użytkownik naciśnie ⏩. `force`
+     (koniec strumienia zgłoszony przez silnik) przechodzi od razu, bez patrzenia
+     na pozycję. Gdy w tę stronę nie ma już programu (koniec archiwum), nic się
+     nie dzieje — obraz zostaje tak, jak jest. */
+  function rollArchiveAtEnd(force) {
+    if (!state.isArchive || atLiveEdge()) return false;
+    if (Date.now() - state.rollAt < ROLL_SETTLE) return false;
+    if (state.rewindEnd) {
+      /* obraz cofnięto na koniec poprzedniego programu (patrz stepToNeighbor):
+         nie przeskakujemy w przód, póki obraz siedzi na końcu — inaczej ⏪
+         odbiłoby zaraz z powrotem do programu, z którego przyszliśmy. Gdy obraz
+         ruszy z końca, znacznik gaśnie i zwykłe przejście działa dalej. */
+      if (!archiveAtProgramEnd()) state.rewindEnd = false;
+      return false;
+    }
+    if (!force && !archiveAtProgramEnd()) return false;
+    var target = neighborProgram(1);
+    if (!target) return false;
+    state.rollAt = Date.now();
+    playChannel(state.watchChannel, target, "playerScreen");
+    return true;
+  }
+
   /* Przewijanie pilota (⏪/⏩): po nagraniu skaczemy o krok z ustawień, a gdy
      w oknie kończącym się na „teraz” nie ma już czego przewijać — ⏩ wraca na
      żywo, a ⏪ wczytuje dłuższe okno catch-up. Na samym kanale na żywo ⏪
@@ -7058,8 +7268,32 @@
        w materiał, którego użytkownik nie wybrał — od tego jest „następny program”. */
     var windowSeconds = archiveProgramSeconds();
     var limit = windowSeconds > 0 ? Math.min(video.duration, windowSeconds) : video.duration;
+
+    /* ⏩ to ruch w przód: cofnięcie na koniec poprzedniego programu przestaje
+       obowiązywać, więc automatyczne przejście znowu działa (patrz stepToNeighbor
+       i rollArchiveAtEnd) */
+    if (direction > 0) state.rewindEnd = false;
+
+    /* Koniec programu z EPG (materiał odtworzony do końca, a okno nie kończy się
+       na „teraz”): ⏩ idzie do następnego programu z EPG, a ⏪ na początku do
+       poprzedniego — tak jak „następny / poprzedni” w odtwarzaczu. Bez tego
+       przewijanie na granicy programu było martwym punktem, gdy materiał oddany
+       przez serwer okazywał się dłuższy niż program z EPG (zgłoszony błąd). */
+    if (!atLiveEdge()) {
+      if (direction > 0 && video.currentTime >= limit - 0.5 && stepToNeighbor(1)) return;
+      if (direction < 0 && video.currentTime <= 0.5 && stepToNeighbor(-1)) return;
+    }
+
     var before = video.currentTime;
+    /* obraz cofnięty na koniec poprzedniego programu mógł już dobiec końca
+       (zatrzymany na ostatniej klatce) — skok ma go znowu puścić, żeby cofanie
+       było widać, a nie zostawiało zamrożonej klatki (patrz stepToNeighbor) */
+    var wasEnded = video.ended === true;
     video.currentTime = Math.max(0, Math.min(limit, before + direction * step));
+    if (wasEnded) {
+      var resume = video.play();
+      if (resume && resume.catch) resume.catch(function () {});
+    }
     $("playerProgress").style.width = (Math.min(video.currentTime, limit) / limit) * 100 + "%";
     $("playerTime").textContent = formatTime(video.currentTime) + " / " + formatTime(limit);
     /* ile obrazu naprawdę przybyło: na krawędzi nagrania skok bywa mniejszy od
@@ -7131,6 +7365,18 @@
        (patrz archiveProgramSeconds) */
     var programSeconds = archiveProgramSeconds();
     var limitMs = programSeconds > 0 ? Math.min(state.vlcLength, programSeconds * 1000) : state.vlcLength;
+
+    /* ⏩ to ruch w przód: cofnięcie na koniec poprzedniego programu przestaje
+       obowiązywać (patrz seekBy i stepToNeighbor) */
+    if (direction > 0) state.rewindEnd = false;
+
+    /* Koniec programu z EPG: ⏩ następny program, a ⏪ na początku poprzedni
+       (patrz seekBy) — zamiast zatrzymywać się na granicy oddanego materiału */
+    if (!atLiveEdge()) {
+      if (direction > 0 && at >= limitMs - 500 && stepToNeighbor(1)) return;
+      if (direction < 0 && at <= 500 && stepToNeighbor(-1)) return;
+    }
+
     var target = Math.max(0, Math.min(limitMs, at + direction * stepMs));
     if (!vlcSeek(target)) {
       /* most milczy (np. most zniknął w trakcie) — zostaje pasek z informacją */
@@ -8824,27 +9070,13 @@
     playChannel(state.watchChannel, null, "playerScreen");
   }
 
-  /* ◀/▶ na pasku archiwum: poprzednie / następne nagranie tego samego kanału */
+  /* ◀/▶ na pasku archiwum: poprzednie / następne nagranie tego samego kanału.
+     Sąsiada wybiera neighborProgram (patrz tam) — ten sam, którego używa
+     przewijanie na granicy okna. Dzięki temu „następny” trafia też w program
+     lecący teraz, gdy po zakończonym nagraniu nic już nie zostało. */
   function watchProgramStep(direction) {
-    var channel = state.watchChannel;
-    var current = state.watchProgram;
-    if (!channel || !current) return;
-
-    var now = Date.now();
-    var playable = programsFor(channel).filter(function (program) {
-      return program.end > program.start && program.end <= now;
-    });
-    playable.sort(function (a, b) { return a.start - b.start; });
-    if (!playable.length) return;
-
-    var index = -1;
-    for (var i = 0; i < playable.length; i++) {
-      if (playable[i].start <= current.start) index = i;
-      else break;
-    }
-    var target = playable[index + direction];
-    if (!target) return;
-    playChannel(channel, target, "playerScreen");
+    if (!state.watchChannel) return;
+    stepToNeighbor(direction);
   }
 
   /* ---------------------  TREŚĆ PASKA: MINI-EPG KANAŁU  --------------------- */
