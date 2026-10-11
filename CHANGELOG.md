@@ -24,6 +24,11 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.38] — 2026-10-07
+
+### Poprawiono
+- **Odtwarzanie i przewijanie wróciły do stanu z 2.1.34** — seria 2.1.35–2.1.37 dodała „kotwicę” przewijania w przód, która przy trzymanym ⏩ przeładowywała okno nagrania i psuła odtwarzanie oraz catch-up; mechanizm został usunięty w całości, więc „w przód” i „w tył” w archiwum znów działają jak w 2.1.34.
+
 ## [2.1.37] — 2026-10-07
 
 ### Poprawiono
