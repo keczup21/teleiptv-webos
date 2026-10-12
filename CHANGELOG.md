@@ -24,6 +24,12 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.40] — 2026-10-12
+
+### Poprawiono
+- **Odtwarzanie i przewijanie wróciły do stanu z 2.1.33** — świeże okno catch-up z serii 2.1.34–2.1.39 przy skoku w nagraniu psuło odtwarzanie oraz catch-up; mechanizm został usunięty w całości, więc „w przód” i „w tył” w archiwum znów działają jak w 2.1.33, a postęp listy kanałów i licznik z sekundami z 2.1.34 zostają.
+
+
 ## [2.1.39] — 2026-10-07
 
 ### Poprawiono
