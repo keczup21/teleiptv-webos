@@ -60,10 +60,18 @@
         </div>
       </div>
       <div id="xtreamSection" class="hidden">
-        <p class="hint" data-i18n="xtream_hint">Dane z panelu Xtream Codes. Podaj sam adres (host:port) — kanały, kategorie, EPG i archiwum pobiorą się automatycznie.</p>
-        <label><span data-i18n="xtream_server">Adres serwera Xtream</span><input id="xtreamServer" tabindex="0" type="url" placeholder="http://host:8080"></label>
+        <p class="hint" data-i18n="xtream_hint">Dane z panelu Xtream Codes. Podaj sam adres z portem (https — zwykle 443, http — zwykle 80); gdy nie wiesz który, wpisz sam host, aplikacja sprawdzi oba. Kanały, kategorie, EPG i archiwum pobiorą się automatycznie.</p>
+        <label><span data-i18n="xtream_server">Adres serwera Xtream</span><input id="xtreamServer" tabindex="0" type="url" placeholder="https://host:443"></label>
         <label><span data-i18n="username">Użytkownik</span><input id="xtreamUser" tabindex="0" type="text" placeholder="login"></label>
-        <label><span data-i18n="password">Hasło</span><input id="xtreamPass" tabindex="0" type="password" placeholder="hasło"></label>
+        <!-- hasło + „Pokaż”: na telewizorze hasło wpisuje się pilotem, więc musi
+             być sposób, żeby zobaczyć, co się wpisało (patrz app.js:
+             xtreamPassToggle i setPasswordVisible) -->
+        <label class="field-with-toggle"><span data-i18n="password">Hasło</span>
+          <span class="field-row">
+            <input id="xtreamPass" tabindex="0" type="password" placeholder="hasło">
+            <button type="button" id="xtreamPassToggle" class="field-toggle" tabindex="0" aria-pressed="false" data-i18n="show_password">Pokaż</button>
+          </span>
+        </label>
       </div>
       <label><span data-i18n="epg_url">EPG XMLTV (opcjonalny — Xtream pobiera go sam)</span><input id="epgUrl" tabindex="0" type="url" placeholder="https://…/epg.xml"></label>
       <div class="file-source">

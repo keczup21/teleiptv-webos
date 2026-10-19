@@ -24,6 +24,29 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.43] — 2026-10-19
+
+### Poprawiono
+- **Kanał Xtream opisany jako `.m3u8` zagra też jako `.ts`** — gdy serwer ma wyłączone HLS i manifest kanału `/live/` zwraca 404, aplikacja sięga po ten sam strumień jako surowe TS, zamiast kończyć na „format nieobsługiwany”.
+
+## [2.1.42] — 2026-10-18
+
+### Poprawiono
+- **Komunikat o nieudanym kanale mówi, co odpowiedział serwer** — po wyczerpaniu wszystkich sposobów odtwarzania aplikacja pyta panel o dwa pierwsze bajty strumienia (i zaraz zamyka połączenie) i dopisuje do błędu jego odpowiedź: HTTP 200, HTTP 403 albo brak odpowiedzi; od razu widać, czy zawinił adres i konto, czy sam telewizor.
+
+### Dodano
+- **Diagnostyka pokazuje stan serwera** — nowa sekcja „SERWER” z odpowiedzią panelu Xtream (albo adresu playlisty), więc zdjęcie ekranu mówi także, czy serwer w ogóle odpowiada i z jakim statusem.
+
+## [2.1.41] — 2026-10-17
+
+### Poprawiono
+- **Adres panelu z portem 443 znów odtwarza kanały** — aplikacja dopisywała do „host:443” na sztywno `http://`, więc prośba o strumień szła na port szyfrowany i każdy kanał kończył się błędem „manifestLoadError”; teraz port 443 dostaje `https`, a każdy inny `http`.
+- **Logowanie do panelu próbuje też drugiego schematu** — gdy pod wybranym adresem nikt nie odpowiada, aplikacja pyta pod drugim schematem i zapamiętuje działający, więc kanały oraz EPG korzystają od razu z poprawnego adresu; złe hasło nie powtarza próby, tylko od razu pokazuje komunikat o danych, a komunikat o braku odpowiedzi podaje oba sprawdzone adresy.
+- **Enter w ustawieniach przechodzi do następnego pola** — „Gotowe” z klawiatury ekranowej telewizora przeskakuje z loginu do hasła i dalej, zamiast zostawiać kursor w tym samym polu, a z ostatniego pola schodzi do następnego wiersza (zwykle „Zapisz i pobierz”), przy czym w polu szukania na liście kanałów Enter działa jak dotąd.
+
+### Dodano
+- **Podgląd hasła w logowaniu do Xtream** — przycisk obok pola pokazuje wpisane hasło i wraca z nim do ukrytego, więc literówkę widać od razu, także z pilota: po podglądzie kursor wraca do pola i klawiatura otwiera się od razu.
+
 ## [2.1.40] — 2026-10-12
 
 ### Poprawiono

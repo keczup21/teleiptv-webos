@@ -764,6 +764,31 @@ body.uimode-touch .corner-clock { font-size: 17px; padding: 4px 12px; left: 16px
 .row-label { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .row-label select { width: 240px !important; }
 
+/* Hasło + przycisk „Pokaż/Ukryj” (patrz index.html: #xtreamPassToggle): na
+   telewizorze hasło wpisuje się pilotem, więc musi być sposób, żeby zobaczyć,
+   czy znak wpadł. Pole zostaje szerokie, przycisk jest osobnym, fokusowalnym
+   elementem obok — pilot dojeżdża do niego strzałką ▶ z pola. */
+.settings-card .field-row { display: flex; align-items: stretch; gap: 10px; margin-top: 7px; }
+.settings-card .field-row input { flex: 1 1 auto; min-width: 0; margin-top: 0; }
+.settings-card .field-toggle {
+  flex: none;
+  min-width: 132px;
+  min-height: 58px;
+  padding: 0 18px;
+  color: var(--muted);
+  font-size: 17px;
+  background: var(--surface-2);
+  border: 2px solid var(--field-border);
+  border-radius: var(--radius-sm);
+}
+.settings-card .field-toggle[aria-pressed="true"] {
+  color: #fff;
+  background: var(--grad);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+body.uimode-tv .settings-card .field-toggle { min-width: 168px; font-size: 22px; }
+
 /* Pole z listą wyboru, które rysujemy sami (patrz buildChoiceRow() w app.js):
    widać wszystkie pozycje naraz, a wybrana jest w kolorze akcentu — na
    telewizorze nie da się tego przegapić. Ukryty <select> trzyma wartość dla

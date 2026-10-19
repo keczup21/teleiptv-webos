@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.40";
+  var APP_VERSION = "2.1.43";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -373,8 +373,9 @@
     sources: "ŹRÓDŁA", source_type: "Typ źródła", m3u_url: "Link do M3U", m3u_file: "Plik M3U",
     xtream: "Xtream (login)", playlist_url: "Adres playlisty M3U", pick_m3u_file: "Wybierz plik M3U",
     add_local_file: "dodaj lokalny plik", active_file: "Aktywny plik: {name}",
-    xtream_hint: "Dane z panelu Xtream Codes. Podaj sam adres (host:port) — kanały, kategorie, EPG i archiwum pobiorą się automatycznie.",
+    xtream_hint: "Dane z panelu Xtream Codes. Podaj sam adres z portem (https — zwykle 443, http — zwykle 80); gdy nie wiesz który, wpisz sam host, aplikacja sprawdzi oba. Kanały, kategorie, EPG i archiwum pobiorą się automatycznie.",
     xtream_server: "Adres serwera Xtream", username: "Użytkownik", password: "Hasło",
+    show_password: "Pokaż", hide_password: "Ukryj",
     epg_url: "EPG XMLTV (opcjonalny — Xtream pobiera go sam)", pick_epg_file: "Wybierz plik EPG",
     use_link: "Użyj linku", add_local_epg: "lub dodaj lokalny plik XMLTV",
     pick_no_files: "Ten telewizor nie ma czym wybrać pliku — wpisz adres playlisty (Typ źródła: Link do M3U) albo dane Xtream.",
@@ -422,6 +423,12 @@
     err_xtream_inactive: "Xtream: konto nieaktywne ({status}). Sprawdź datę ważności.",
     err_xtream_no_channels: "Xtream nie zwrócił żadnych kanałów live dla tego konta.",
     err_xtream_json: "Panel Xtream zwrócił nieprawidłową odpowiedź (oczekiwano JSON).",
+    err_xtream_unreachable: "Xtream: brak odpowiedzi z {server} (próbowano też {alt}). Sprawdź adres i port — https zwykle 443, http 80. Przy własnym certyfikacie HTTPS telewizor może odmówić połączenia.",
+    /* Co odpowiedział serwer, gdy kanał nie wstał żadnym sposobem odtwarzania
+       (patrz probeVerdict) — to rozstrzyga, kto tu zawinił. */
+    err_probe_ok: "Serwer odpowiada: HTTP {status} ({type}). Adres jest więc dobry — obrazu nie pobiera sam telewizor (certyfikat HTTPS, blokada przeglądarki albo nieobsługiwany kodek).",
+    err_probe_http: "Serwer odpowiada: HTTP {status}. Połączenie odrzucił panel — sprawdź konto, ważność i limit jednoczesnych połączeń.",
+    err_probe_net: "Serwer nie odpowiada ({error}). Sprawdź adres i port panelu — https zwykle 443, http 80.",
     err_not_m3u: "To nie jest playlista M3U.", err_no_channels: "Playlista nie zawiera kanałów.",
     err_epg_xml: "EPG nie jest poprawnym XMLTV.", err_gzip: "Brak biblioteki rozpakowującej GZIP.",
     err_playback: "Nie udało się rozpocząć odtwarzania.",
@@ -509,6 +516,7 @@
     diag_device: "URZĄDZENIE",
     diag_codecs: "KODEKI — CO POTRAFI TEN ODTWARZACZ",
     diag_stream: "STRUMIEŃ",
+    diag_server: "SERWER",
     diag_manifest: "MANIFEST HLS",
     diag_events: "DZIENNIK ZDARZEŃ",
     diag_yes: "tak", diag_no: "nie", diag_maybe: "może", diag_unknown: "?",
@@ -525,6 +533,7 @@
     diag_time: "czas", diag_buffer: "bufor", diag_muted: "wyciszony",
     diag_error: "błąd", diag_none: "brak",
     diag_probing: "sondowanie…", diag_opened: "panel otwarty",
+    diag_server_note: "serwer: {result}",
     diag_auto: "brak obrazu przy grającym dźwięku — panel otwarty sam",
     diag_probe_none: "brak adresu .m3u8 do sprawdzenia",
     diag_probe_failed: "nie udało się pobrać manifestu",
@@ -691,8 +700,9 @@
     sources: "SOURCES", source_type: "Source type", m3u_url: "M3U link", m3u_file: "M3U file",
     xtream: "Xtream (login)", playlist_url: "M3U playlist URL", pick_m3u_file: "Choose M3U file",
     add_local_file: "add a local file", active_file: "Active file: {name}",
-    xtream_hint: "Xtream Codes panel credentials. Enter just the address (host:port) — channels, categories, EPG and archive will load automatically.",
+    xtream_hint: "Xtream Codes panel credentials. Enter just the address with its port (https — usually 443, http — usually 80); if unsure, enter the host alone and the app will try both. Channels, categories, EPG and archive will load automatically.",
     xtream_server: "Xtream server address", username: "Username", password: "Password",
+    show_password: "Show", hide_password: "Hide",
     epg_url: "EPG XMLTV (optional — Xtream loads it automatically)", pick_epg_file: "Choose EPG file",
     use_link: "Use link", add_local_epg: "or add a local XMLTV file",
     pick_no_files: "This TV has no way to pick a file — enter the playlist address (Source type: M3U link) or Xtream credentials.",
@@ -739,6 +749,10 @@
     err_xtream_inactive: "Xtream: account inactive ({status}). Check the expiry date.",
     err_xtream_no_channels: "Xtream returned no live channels for this account.",
     err_xtream_json: "Xtream panel returned an invalid response (expected JSON).",
+    err_xtream_unreachable: "Xtream: no response from {server} (tried {alt} as well). Check the address and port — https is usually 443, http 80. With a self-signed HTTPS certificate the TV may refuse the connection.",
+    err_probe_ok: "The server answers: HTTP {status} ({type}). The address is fine — the TV itself cannot fetch the picture (HTTPS certificate, browser restriction or an unsupported codec).",
+    err_probe_http: "The server answers: HTTP {status}. The panel refused the connection — check the account, its expiry and the simultaneous connection limit.",
+    err_probe_net: "No response from the server ({error}). Check the panel address and port — https is usually 443, http 80.",
     err_not_m3u: "This is not an M3U playlist.", err_no_channels: "Playlist contains no channels.",
     err_epg_xml: "EPG is not valid XMLTV.", err_gzip: "Missing GZIP decompression library.",
     err_playback: "Failed to start playback.",
@@ -827,6 +841,7 @@
     diag_codecs: "CODECS — WHAT THIS PLAYER CAN DO",
     diag_stream: "STREAM",
     diag_manifest: "HLS MANIFEST",
+    diag_server: "SERVER",
     diag_events: "EVENT LOG",
     diag_yes: "yes", diag_no: "no", diag_maybe: "maybe", diag_unknown: "?",
     diag_platform: "system", diag_native_app: "native app",
@@ -842,6 +857,7 @@
     diag_time: "time", diag_buffer: "buffer", diag_muted: "muted",
     diag_error: "error", diag_none: "none",
     diag_probing: "probing…", diag_opened: "panel opened",
+    diag_server_note: "server: {result}",
     diag_auto: "audio playing with no picture — panel opened on its own",
     diag_probe_none: "no .m3u8 address to check",
     diag_probe_failed: "could not fetch the manifest",
@@ -1127,6 +1143,9 @@
     for (var k = 0; k < ti.length; k++) {
       ti[k].title = t(ti[k].getAttribute("data-i18n-title"));
     }
+    /* przycisk podglądu hasła ma napis zależny od stanu („Pokaż” / „Ukryj”),
+       więc samo data-i18n nie wystarczy — dociągamy go po zmianie języka */
+    syncPasswordToggle();
     document.documentElement.lang = settings.language;
   }
 
@@ -1842,6 +1861,9 @@
     $("epgUrl").value = (profile && profile.epgUrl) || "";
 
     updateSourceSections();
+    /* hasło zawsze wraca ukryte — po przełączeniu profilu albo ponownym wejściu
+       w ustawienia nie ma powodu trzymać go na ekranie */
+    setPasswordVisible(false);
     /* lista wyboru pokazuje wartość wczytaną z profilu */
     syncChoiceRows();
     updatePlaylistPicker();
@@ -1869,6 +1891,30 @@
     $("selectedEpgFile").textContent = hasFile
       ? t("active_file", { name: draft.epgName || "epg.xml" })
       : t("add_local_epg");
+  }
+
+  /* ---------- podgląd hasła Xtream (przycisk obok pola) -------------------
+     Na telewizorze hasło wpisuje się pilotem, znak po znaku, i nie widać, czy
+     któryś wpadł — a pomyłki w haśle kończą się komunikatem „nieprawidłowy
+     użytkownik lub hasło”, który nic nie mówi o literówce. Przycisk zmienia
+     tylko typ pola (wartość zostaje), więc hasło da się podejrzeć i poprawić.
+     Napis idzie przez słownik (show_password / hide_password), bo zależy od
+     stanu, a nie tylko od języka — dlatego applyTranslations() woła
+     syncPasswordToggle() po ustawieniu napisów. */
+  function syncPasswordToggle() {
+    var input = $("xtreamPass");
+    var button = $("xtreamPassToggle");
+    if (!input || !button) return;
+    var shown = String(input.getAttribute("type") || "").toLowerCase() === "text";
+    button.setAttribute("aria-pressed", shown ? "true" : "false");
+    button.textContent = t(shown ? "hide_password" : "show_password");
+  }
+
+  function setPasswordVisible(shown) {
+    var input = $("xtreamPass");
+    if (!input) return;
+    input.setAttribute("type", shown ? "text" : "password");
+    syncPasswordToggle();
   }
 
   function readFile(file, asBinary) {
@@ -1969,18 +2015,45 @@
     });
   }
 
+  /* Adres panelu Xtream. Schemat dopisujemy według portu: w panelach https stoi
+     na 443, a http na 80 — wcześniej „host:443” dostawało na sztywno „http://”
+     i połączenie szło na port TLS (na ekranie kończyło się to komunikatem
+     „manifestLoadError”, potem „format nieobsługiwany” przy każdym kanale).
+     Port 443 → https, każdy inny (albo brak) → http. Adres wpisany ze
+     schematem zostaje bez zmian — wtedy decyzję podejmuje użytkownik. */
+  function serverScheme(server) {
+    var port = (String(server || "").match(/:(\d{1,5})(?:\/|$)/) || [])[1];
+    return port === "443" ? "https" : "http";
+  }
+
   function normalizeServer(value) {
     var server = String(value || "").trim().replace(/\/+$/, "");
     if (!server) return "";
-    if (!/^https?:\/\//i.test(server)) server = "http://" + server;
+    if (!/^https?:\/\//i.test(server)) server = serverScheme(server) + "://" + server;
     return server;
   }
 
-  function xtreamEndpoint(profile, extra) {
-    var server = normalizeServer(profile.xtreamServer);
+  /* Ten sam adres pod drugim schematem — kandydat do próby, gdy pierwszy nie
+     odpowie (patrz xtreamLogin). Nikt nie musi wiedzieć, czy panel stoi na
+     https, czy na http: „host:443” i tak najpierw pójdzie po https, a dopiero
+     potem po http. */
+  function alternateServer(value) {
+    var raw = String(value || "").trim().replace(/\/+$/, "");
+    if (!raw) return "";
+    var server = normalizeServer(raw);
+    if (!/^https?:\/\//i.test(server)) return "";
+    var bare = server.replace(/^https?:\/\//i, "");
+    return (/^https:/i.test(server) ? "http://" : "https://") + bare;
+  }
+
+  /* `extra` to akcja panelu, a `server` pozwala zapytać pod wskazanym adresem —
+     używa tego xtreamLogin, gdy pierwszy schemat nie odpowiedział (patrz
+     xtreamLogin). Bez `server` bierzemy adres z profilu. */
+  function xtreamEndpoint(profile, extra, server) {
+    var base = server || normalizeServer(profile.xtreamServer);
     var user = encodeURIComponent(profile.xtreamUser || "");
     var pass = encodeURIComponent(profile.xtreamPass || "");
-    return server + "/player_api.php?username=" + user + "&password=" + pass + (extra ? "&" + extra : "");
+    return base + "/player_api.php?username=" + user + "&password=" + pass + (extra ? "&" + extra : "");
   }
 
   /* =============================  AKTUALIZACJE  =============================
@@ -2405,6 +2478,74 @@
     });
   }
 
+  /* ---- sonda adresu: czy serwer w ogóle odpowiada i z jakim statusem ----
+
+     Zwykłe pobranie tu nie wchodzi: strumień na żywo nie ma końca, więc
+     czekalibyśmy na niego bez powodu. Sonda pyta tylko o nagłówki odpowiedzi —
+     i właśnie one mówią, czy kanał nie wstał z powodu panelu (HTTP 403, 404),
+     czy telewizora (adres odpowiada, a obrazu nie ma). */
+
+  /* Tyle czekamy na odpowiedź sondy. Dłużej nie ma sensu: na ekranie błędu
+     nikt nie będzie pół minuty wpatrywał się w „sprawdzam…”. */
+  var PROBE_TIMEOUT = 8000;
+
+  /* Droga przez serwis: Node na telewizorze pyta o dwa pierwsze bajty (Range)
+     i zamyka połączenie, więc sonda nie pobiera strumienia ani nie zabiera
+     miejsca na koncie z limitem połączeń (patrz probeUrl w main.js). */
+  function webosServiceProbe(url) {
+    return new Promise(function (resolve, reject) {
+      webOS.service.request(
+        "luna://pl.openiptv.player.service.fetch/probe",
+        { url: url },
+        function (result) {
+          if (result && result.returnValue) {
+            resolve({
+              status: result.status | 0,
+              contentType: result.contentType ? String(result.contentType) : ""
+            });
+          } else {
+            reject(new Error(result && result.errorText ? result.errorText : "service error"));
+          }
+        },
+        function (err) {
+          reject(new Error(err && err.errorText ? err.errorText : "service error"));
+        }
+      );
+    });
+  }
+
+  /* Droga bez serwisu: HEAD przez przeglądarkę. Ciała nie pobieramy wcale,
+     a interesują nas tylko dwie odpowiedzi — status albo brak dostępu (CORS),
+     bo to one rozstrzygają, czy winny jest adres, czy przeglądarka. */
+  function browserHeadProbe(url) {
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("HEAD", url, true);
+      xhr.timeout = PROBE_TIMEOUT;
+      xhr.onload = function () {
+        if (xhr.status > 0) resolve({ status: xhr.status, contentType: "" });
+        else reject(new Error(t("err_network")));
+      };
+      xhr.onerror = function () {
+        reject(new Error(t("err_network")));
+      };
+      xhr.ontimeout = function () {
+        reject(new Error(t("err_timeout")));
+      };
+      xhr.send();
+    });
+  }
+
+  /* Sonda nigdy nie odrzuca: wynik albo błąd opisuje ten sam obiekt, więc
+     wołający nie musi mieć dwóch ścieżek. */
+  function serverProbe(url) {
+    if (!url) return Promise.resolve(null);
+    var request = webosServiceAvailable() ? webosServiceProbe(url) : browserHeadProbe(url);
+    return withTimeout(request, PROBE_TIMEOUT).then(null, function (error) {
+      return { error: String(error && error.message ? error.message : error).slice(0, 80) };
+    });
+  }
+
   function httpGet(url, asArrayBuffer, onProgress) {
     /* natywne HTTP omija CORS — Android (Capacitor) oraz webOS (serwis) */
     if (nativeHttpAvailable()) {
@@ -2671,6 +2812,78 @@
     return server + "/xmltv.php?username=" + user + "&password=" + pass + "&next_days=" + days;
   }
 
+  /* Ile czekamy na samo logowanie, zanim spróbujemy drugiego schematu. Panel
+     odpowiada w milisekundach, a dłuższa cisza oznacza zwykle zły port/schemat
+     (albo https z certyfikatem, którego telewizor nie zna) — nie ma sensu
+     trzymać użytkownika przy „łączę z Xtream…” przez dwa i pół minuty, tyle
+     wynosi limit pobierania (patrz httpGet). */
+  var XTREAM_LOGIN_TIMEOUT = 12000;
+
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      var done = false;
+      var timer = window.setTimeout(function () {
+        if (done) return;
+        done = true;
+        reject(new Error(t("err_timeout")));
+      }, ms);
+      promise.then(function (value) {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      }, function (error) {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        reject(error);
+      });
+    });
+  }
+
+  /* Adres, który naprawdę odpowiedział, wraca do profilu: z niego budują się
+     adresy kanałów (xtreamStreamUrl) i EPG (xtreamXmltvUrl), więc poprawka
+     schematu obowiązuje od razu, po zapisaniu ustawień i przy następnym starcie
+     (zapis jest odroczony — saveSettings — żeby nie zacinał obrazu). */
+  function keepXtreamServer(profile, server) {
+    if (!server || normalizeServer(profile.xtreamServer) === server) return;
+    profile.xtreamServer = server;
+    saveSettings();
+  }
+
+  /* Logowanie do panelu z próbą drugiego schematu. Adres bez schematu to tylko
+     domysł (port 443 → https, reszta → http), a panel bywa wystawiony odwrotnie
+     — dlatego po błędzie sieci albo odpowiedzi, która nie jest JSON-em,
+     pytamy pod drugim schematem. Złe hasło (auth != 1) próby nie powtarza: to
+     już odpowiedź panelu, a nie problem z adresem. */
+  function xtreamLogin(profile) {
+    var first = normalizeServer(profile.xtreamServer);
+    var second = alternateServer(profile.xtreamServer);
+    var alt = second || first;
+    var ask = function (server) {
+      return withTimeout(fetchJson(xtreamEndpoint(profile, "", server)), XTREAM_LOGIN_TIMEOUT)
+        .then(function (info) { return { server: server, info: info }; });
+    };
+    return ask(first).then(null, function () {
+      if (!second || second === first) {
+        throw new Error(t("err_xtream_unreachable", { server: first, alt: alt }));
+      }
+      return ask(second).then(null, function () {
+        throw new Error(t("err_xtream_unreachable", { server: first, alt: alt }));
+      });
+    }).then(function (result) {
+      var userInfo = result.info && result.info.user_info;
+      if (!userInfo || String(userInfo.auth) !== "1") {
+        throw new Error(t("err_xtream_auth"));
+      }
+      if (userInfo.status && String(userInfo.status).toLowerCase() !== "active") {
+        throw new Error(t("err_xtream_inactive", { status: userInfo.status }));
+      }
+      keepXtreamServer(profile, result.server);
+      return result.info;
+    });
+  }
+
   /* krok 1: logowanie (player_api.php bez akcji) → user_info.auth
      krok 2: kategorie live       (action=get_live_categories)
      krok 3: lista kanałów live   (action=get_live_streams)
@@ -2679,14 +2892,9 @@
     var categories = [];
     var streams = [];
 
-    return fetchJson(xtreamEndpoint(profile, "")).then(function (info) {
-      var userInfo = info && info.user_info;
-      if (!userInfo || String(userInfo.auth) !== "1") {
-        throw new Error("Xtream: nieprawidłowy adres serwera, użytkownik lub hasło.");
-      }
-      if (userInfo.status && String(userInfo.status).toLowerCase() !== "active") {
-        throw new Error("Xtream: konto nieaktywne (" + userInfo.status + "). Sprawdź datę ważności.");
-      }
+    /* xtreamLogin poprawia profil na schemat, który odpowiedział, więc kolejne
+       zapytania (i adresy kanałów) idą już pewnym adresem */
+    return xtreamLogin(profile).then(function () {
       return fetchJson(xtreamEndpoint(profile, "action=get_live_categories"));
     }).then(function (data) {
       if (Array.isArray(data)) categories = data;
@@ -2694,7 +2902,7 @@
     }).then(function (data) {
       if (Array.isArray(data)) streams = data;
       if (!streams.length) {
-        throw new Error("Xtream nie zwrócił żadnych kanałów live dla tego konta.");
+        throw new Error(t("err_xtream_no_channels"));
       }
       var groupNames = {};
       categories.forEach(function (category) {
@@ -3983,6 +4191,42 @@
     return details;
   }
 
+  /* Co powiedzieć o adresie, którego żaden sposób odtwarzania nie ruszył.
+     Trzy odpowiedzi, bo każda znaczy co innego: serwer przyjął połączenie
+     (winny telewizor — certyfikat HTTPS, blokada przeglądarki albo kodek),
+     serwer odpowiedział błędem (winny panel — konto, limit połączeń, wygasła
+     sesja) i cisza (winny adres — host, port albo schemat). */
+  function probeVerdict(result) {
+    if (!result) return "";
+    if (result.error) {
+      return t("err_probe_net", { error: String(result.error).slice(0, 60) });
+    }
+    var status = result.status | 0;
+    if (status >= 200 && status < 300) {
+      return t("err_probe_ok", {
+        status: status,
+        type: result.contentType ? String(result.contentType) : t("diag_none")
+      });
+    }
+    return t("err_probe_http", { status: status || "?" });
+  }
+
+  /* Komunikat o nieudanym kanale mówi dopiero po sondzie, CO odpowiedział
+     serwer. Sonda idzie w tle, więc komunikat pojawia się od razu, a wiersz
+     z odpowiedzią dopisuje się, gdy przyjdzie — i tylko wtedy, gdy na ekranie
+     wciąż wisi ten sam błąd tego samego adresu (nowy kanał ma własny). */
+  function probeFailedStream(text, url) {
+    if (!url) return;
+    var token = String(url);
+    serverProbe(token).then(function (result) {
+      var verdict = probeVerdict(result);
+      if (!verdict) return;
+      diagNote(t("diag_server_note", { result: verdict }));
+      if (!state.watchChannel || state.currentSource !== token) return;
+      showPlayerError(text + "\n" + verdict);
+    });
+  }
+
   /* ----------  sesja multimediów: ⏵‖ i ⏹ na pilocie ----------
      Na Androidzie i Fire TV system kieruje przyciski pilota do sesji
      multimediów strony, a nie do zdarzeń klawiatury — bez zarejestrowania
@@ -4287,6 +4531,9 @@
   var diagManifest = "";       /* opis manifestu HLS albo komunikat błędu */
   var diagManifestFor = "";    /* adres, którego dotyczy diagManifest */
   var diagProbing = false;
+  var diagServer = "";         /* odpowiedź serwera (sonda adresu panelu) */
+  var diagServerFor = "";      /* adres, którego dotyczy diagServer */
+  var diagServerBusy = false;
   var diagShown = "";          /* ostatnio pokazany tekst — bez przerysowań */
   var diagTicker = null;       /* zegar odświeżający liczby w otwartym panelu */
 
@@ -4566,6 +4813,42 @@
     return lines;
   }
 
+  /* ---- sonda adresu panelu (czy serwer w ogóle odpowiada) ----
+
+     Pytamy endpoint panelu Xtream albo adres playlisty, a nie strumień: podczas
+     grania sonda na strumień zajęłaby drugie połączenie na koncie z limitem
+     i mogłaby zatrzymać obraz, który właśnie leci. Host, port i certyfikat są
+     w obu przypadkach ten sam, więc odpowiedź i tak mówi, co trzeba. */
+  function diagServerUrl() {
+    var profile = activeProfile();
+    if (!profile) return "";
+    if (profile.sourceType === "xtream" && profile.xtreamServer) return xtreamEndpoint(profile, "");
+    return profile.playlistUrl || "";
+  }
+
+  function diagProbeServer() {
+    var url = diagServerUrl();
+    if (!url) {
+      diagServer = t("diag_none");
+      return;
+    }
+    if (diagServerBusy || url === diagServerFor) return;
+    diagServerFor = url;
+    diagServerBusy = true;
+    diagServer = t("diag_probing");
+    serverProbe(url).then(function (result) {
+      if (diagServerFor !== url) return;
+      diagServerBusy = false;
+      diagServer = probeVerdict(result) || t("diag_none");
+      diagNote(t("diag_server_note", { result: diagServer }));
+      if (diagVisible()) renderDiagnostics();
+    });
+  }
+
+  function diagServerLines() {
+    return [t("diag_server"), " " + (diagServer || t("diag_probing"))];
+  }
+
   function diagManifestLines() {
     return [t("diag_manifest"), " " + (diagManifest || t("diag_probing"))];
   }
@@ -4587,6 +4870,7 @@
     lines = lines.concat(diagDeviceLines(), [""]);
     lines = lines.concat(diagCodecLines(), [""]);
     lines = lines.concat(diagStreamLines(), [""]);
+    lines = lines.concat(diagServerLines(), [""]);
     lines = lines.concat(diagManifestLines(), [""]);
     lines = lines.concat(diagEventLines());
     return lines.join("\n");
@@ -4698,6 +4982,7 @@
     panel.classList.remove("hidden");
     diagNote(t("diag_opened"));
     diagProbeStream();
+    diagProbeServer();
     renderDiagnostics();
     startDiagTicker();
     /* Zamykanie musi mieć na czym stanąć: fokus zostawiony pod panelem
@@ -6243,6 +6528,18 @@
       browser.push({ engine: "hls", url: hlsUrl });
     }
 
+    /* Odwrotność wpisu wyżej: ten sam kanał jako surowy TS. Panel Xtream potrafi
+       opisać kanał jako .m3u8, choć serwer oddaje tylko .ts (HLS wyłączone) —
+       manifest wraca wtedy HTTP 404 i wszystkie trzy drogi powyżej kończą się
+       na „format nieobsługiwany”. Adres Xtream (/live/<user>/<pass>/<id>)
+       poznajemy po /live/ w ścieżce — tylko tam zamiana .m3u8 → .ts to ten sam
+       strumień w innym pojemniku, a nie zmyślony plik. */
+    var tsUrl = primaryUrl.replace(/\.m3u8(\?.*)?$/i, ".ts$1");
+    if (tsUrl !== primaryUrl && /\/live\//i.test(primaryUrl.split("#")[0].split("?")[0])) {
+      browser.push({ engine: "native", url: tsUrl });
+      browser.push({ engine: "mse", url: tsUrl });
+    }
+
     /* Drogi sprzętowe stają na CZELE kolejki — i na kanale na żywo, i w nagraniu
        z archiwum. Powód jest jeden: to one mają najwięcej szans z materiałem,
        którego przeglądarka nie rozbierze (<video> nie czyta MPEG-TS, a MSE na 4K
@@ -6746,7 +7043,13 @@
         lines.push(attempts ? t("retry_fail", { total: attempts }) : t("retry_off"));
       }
       lines.push(t("back_hint"));
-      showPlayerError(lines.join("\n"));
+      var failure = lines.join("\n");
+      showPlayerError(failure);
+      /* Dlaczego kanał nie wstał: pytamy serwer o ten sam adres, którego żaden
+         sposób nie ruszył, i dopisujemy jego odpowiedź do komunikatu (patrz
+         probeFailedStream). W tym momencie nic już nie gra, więc sonda nie
+         zabiera miejsca na koncie z limitem połączeń. */
+      probeFailedStream(failure, state.currentSource);
       /* Dźwięk bez obrazu nie jest odtwarzaniem. Po wyczerpaniu wszystkich
          sposobów gasimy silnik i zatrzymujemy obraz, żeby kanał nie grał dalej
          w tle pod komunikatem — a w komunikacie jest już powiedziane, co zrobić
@@ -7796,6 +8099,39 @@
     if (!element || !element.focus) return;
     focusWithoutScroll(element);
     keepInView(element);
+  }
+
+  /* Następne pole do pisania w formularzu ustawień, w kolejności z dokumentu.
+     Pomijamy rzeczy niewidoczne (sekcje ukryte po zmianie typu źródła) i te,
+     których Enter nie dotyczy: ptaszki, wybór pliku i pola ukryte. */
+  function nextSettingsField(field) {
+    var screen = $("settingsScreen");
+    if (!screen || !screen.querySelectorAll) return null;
+    var fields = screen.querySelectorAll("input");
+    var passed = false;
+    for (var i = 0; i < fields.length; i++) {
+      var item = fields[i];
+      if (item === field) { passed = true; continue; }
+      if (!passed || item.disabled || item.offsetParent === null) continue;
+      if (!isTextField(item)) continue;
+      return item;
+    }
+    return null;
+  }
+
+  /* Enter/„Gotowe” z klawiatury ekranowej telewizora: login → hasło → kolejne
+     pole. Wcześniej kończył pisanie i zostawiał fokus w tym samym polu, więc
+     do hasła trzeba było dojechać pilotem (a na webOS klawiatura zasłania
+     formularz). Z ostatniego pola schodzimy do następnego wiersza — zwykle
+     „Zapisz i pobierz”. */
+  function focusNextSettingsField(field) {
+    var next = nextSettingsField(field);
+    if (next) {
+      focusField(next);
+      return;
+    }
+    if (field.blur) field.blur();
+    if (!focusNearest(40)) focusNearest(38);
   }
 
   /* Ustawienie pola po zmianie, której sami pilnujemy (np. przełączenie typu
@@ -10254,6 +10590,20 @@
          i szukamy jeszcze raz — w drugą stronę, gdy w tę nie ma już nic. Bez
          tego ze skrajnego wiersza nie dało się wyjść (pilot nie ma Tab),
          a na webOS klawiatura zostawiała fokus w polu. */
+
+      /* Enter z klawiatury ekranowej telewizora (także „Gotowe” i OK pilota,
+         gdy pole jest już w trybie pisania) przechodzi do następnego pola:
+         login → hasło → dalej. Dotyczy tylko karty ustawień — w polu szukania
+         na liście kanałów Enter zostaje jak dotąd. */
+      if ((key === 13 || key === 23 || key === 66) &&
+          !$("settingsScreen").classList.contains("hidden") &&
+          $("settingsScreen").contains(field)) {
+        event.preventDefault();
+        if (event.repeat) return;
+        focusNextSettingsField(field);
+        return;
+      }
+
       if (fieldDown) {
         event.preventDefault();
         if (!focusNearest(key) && document.activeElement === field) {
@@ -10476,6 +10826,21 @@
     var type = $("sourceType").value;
     if (type === "xtream") focusOrHighlight($("xtreamServer"));
     else if (type === "m3u-url") focusOrHighlight($("playlistUrl"));
+  };
+
+  /* „Pokaż / Ukryj” hasło: zmienia tylko typ pola (wartość zostaje), a potem
+     wraca fokusem do pola — na telewizorze fokus na polu otwiera klawiaturę,
+     więc po podglądzie można od razu poprawiać hasło, bez szukania wiersza
+     pilotem. Kursor staje na końcu, żeby dopisywanie trafiało za hasło. */
+  $("xtreamPassToggle").onclick = function () {
+    var input = $("xtreamPass");
+    if (!input) return;
+    var shown = String(input.getAttribute("type") || "").toLowerCase() !== "text";
+    setPasswordVisible(shown);
+    try {
+      input.setSelectionRange(input.value.length, input.value.length);
+    } catch (error) { /* pole ukryte albo starsza przeglądarka — kursor zostaje */ }
+    focusField(input);
   };
 
   $("language").onchange = function () {

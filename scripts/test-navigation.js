@@ -2538,7 +2538,7 @@ const codeNext = src.slice(nextStart, src.lastIndexOf("\n\n", nextMarker));
 
 function nextHarness(o) {
   o = o || {};
-  const calls = { errors: [], notes: [], destroyed: 0, paused: 0, timers: [], started: [] };
+  const calls = { errors: [], notes: [], destroyed: 0, paused: 0, timers: [], started: [], probes: [] };
   const video = { paused: false, pause: function () { calls.paused++; this.paused = true; } };
   const sandbox = {
     settings: { retryAttempts: "2" },
@@ -2551,13 +2551,16 @@ function nextHarness(o) {
       ],
       sourceIndex: o.sourceIndex === undefined ? 2 : o.sourceIndex,
       cycle: o.cycle === undefined ? 0 : o.cycle,
-      retryTimer: null
+      retryTimer: null,
+      currentSource: "http://s/x.ts"
     },
     t: function (key) { return "<" + key + ">"; },
     $: function (id) { return id === "video" ? video : null; },
     maybeAutoDiagnose: function () {},
     diagNote: function (note) { calls.notes.push(note); },
     showPlayerError: function (message) { calls.errors.push(message); },
+    /* sonda adresu idzie w tle — tu tylko notujemy, o jaki adres pyta */
+    probeFailedStream: function (text, url) { calls.probes.push(url); },
     startSourceEntry: function (entry) { calls.started.push(entry); },
     destroyEngine: function () { calls.destroyed++; },
     setTimeout: function (fn) { calls.timers.push(fn); return 1; },
@@ -2584,6 +2587,11 @@ check("wyczerpana kolejka: komunikat podaje powod, rade i nie liczy „prob pono
 check("wyczerpana kolejka: dziennik panelu notuje oddanie kanalu",
   nh.calls.notes.join(",") === "<diag_engine_fail>,<diag_giveup_audio>",
   JSON.stringify(nh.calls.notes));
+/* Komunikat nie mowi sam, ze „sie nie udalo”: sonda pyta serwer o ten wlasnie
+   adres i dopisuje, co odpowiedzial (patrz probeFailedStream). */
+check("wyczerpana kolejka: sondzie idzie adres, ktory nie zadzialal",
+  nh.calls.probes.length === 1 && nh.calls.probes[0] === "http://s/x.ts",
+  JSON.stringify(nh.calls.probes));
 
 /* zanim kolejka sie wyczerpie, nastepny sposob odtwarzania (czytnik HLS→TS) ma isc
    jako pierwszy i od razu poinformowac, ze probujemy wlasnie jego */
@@ -2820,6 +2828,20 @@ check("uruchomione: zapamietany czytnik nie ciagnie innych kanalow",
   engines("http://s/y.m3u8").join(",") === "native,hls,mse",
   JSON.stringify(engines("http://s/y.m3u8")));
 queueBox.settings.feederSources = [];
+/* Panel Xtream potrafi opisać kanał jako .m3u8, choć serwer oddaje tylko .ts
+   (HLS wyłączone) — manifest wraca HTTP 404 i trzy drogi pod .m3u8 kończą się
+   na „format nieobsługiwany”. Adres Xtream (/live/<user>/<pass>/<id>) dostaje
+   więc te same drogi pod .ts, żeby kanał grał mimo wyłączonego HLS. */
+const qXtreamM3u8 = queueBox.buildSourceQueue("http://s:8080/live/u/p/12345.m3u8");
+check("uruchomione: kanal Xtream .m3u8 dostaje zapasowy .ts (serwer bez HLS)",
+  qXtreamM3u8.map(function (e) { return e.engine; }).join(",") === "native,hls,mse,native,mse" &&
+  qXtreamM3u8[3].url === "http://s:8080/live/u/p/12345.ts" &&
+  qXtreamM3u8[4].url === "http://s:8080/live/u/p/12345.ts" &&
+  qXtreamM3u8[3].hls !== true && qXtreamM3u8[4].hls !== true,
+  JSON.stringify(qXtreamM3u8.map(function (e) { return e.engine + ":" + e.url; })));
+check("uruchomione: zwykly .m3u8 spoza /live/ nie dostaje zmyślonego .ts",
+  engines("http://s/y.m3u8").join(",") === "native,hls,mse",
+  JSON.stringify(engines("http://s/y.m3u8")));
 /* Kanał na żywo w aplikacji na Androidzie idzie najpierw do odtwarzacza odbiornika
    (ExoPlayer) — to on rozbiera TS i HLS sprzętowo, więc tylko on daje 4K bez
    zrywania (patrz startExoSource). Gdy zawiedzie, kolejka idzie dalej jak dotąd. */

@@ -1,6 +1,6 @@
 {
   "name": "teleiptv-webos",
-  "version": "2.1.40",
+  "version": "2.1.43",
   "private": true,
   "description": "TeleIPTV dla LG webOS (.ipk) - odtwarzacz IPTV na telewizor.",
   "engines": {
@@ -18,7 +18,9 @@
     "test:pick": "node scripts/test-file-picker.js",
     "test:nav": "node scripts/test-navigation.js",
     "test:notes": "node scripts/test-release-notes.js",
-    "test": "npm run test:seek && npm run test:update && npm run test:ui && npm run test:pick && npm run test:nav && npm run test:notes"
+    "test:xtream": "node scripts/test-xtream-login.js",
+    "test:probe": "node scripts/test-stream-probe.js",
+    "test": "npm run test:seek && npm run test:update && npm run test:ui && npm run test:pick && npm run test:nav && npm run test:notes && npm run test:xtream && npm run test:probe"
   },
   "devDependencies": {
     "http-server": "^14.1.1"
