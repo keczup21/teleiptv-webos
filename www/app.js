@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.43";
+  var APP_VERSION = "2.1.44";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -40,7 +40,7 @@
   /* Ile pikseli przed ekranem wczytujemy logotyp kanału (resztę leniwie) */
   var LOGO_MARGIN = 800;
   /* Po ilu ms samoczynnie znika pasek informacyjny odtwarzacza */
-  var OSD_AUTOHIDE = 20000;
+  var OSD_AUTOHIDE = 10000;
   /* Po jakim czasie trzymania OK otwiera się menu opcji kanału (TV) */
   var OK_HOLD_MS = 700;
   /* Ile czekamy na obraz, zanim uznamy, że dany sposób odtwarzania zawiódł */

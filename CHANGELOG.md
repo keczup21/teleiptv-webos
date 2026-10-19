@@ -24,6 +24,11 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.44] — 2026-10-19
+
+### Zmieniono
+- **Pasek odtwarzacza chowa się po 10 sekundach** — pasek z nazwą kanału, programem i przyciskami znika sam szybciej: po 10 s bezczynności zamiast 20 s (dalej zostaje na ekranie, gdy obraz jest w pauzie).
+
 ## [2.1.43] — 2026-10-19
 
 ### Poprawiono
