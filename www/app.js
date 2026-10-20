@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.44";
+  var APP_VERSION = "2.1.45";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -1466,6 +1466,7 @@
     p.xtreamServer = p.xtreamServer || "";
     p.xtreamUser = p.xtreamUser || "";
     p.xtreamPass = p.xtreamPass || "";
+    p.xtreamStreamServer = p.xtreamStreamServer || "";
     p.epgUrl = p.epgUrl || "";
     p.epgFileText = p.epgFileText || "";
     p.epgFileName = p.epgFileName || "";
@@ -2044,6 +2045,21 @@
     if (!/^https?:\/\//i.test(server)) return "";
     var bare = server.replace(/^https?:\/\//i, "");
     return (/^https:/i.test(server) ? "http://" : "https://") + bare;
+  }
+
+  /* Serwer strumieni Xtream bywa inny niż adres panelu. Panel zwraca w polu
+     server_info, gdzie naprawdę stoją strumienie (url, port, https_port,
+     server_protocol) — budowanie adresu kanału z adresu panelu kończyło się
+     HTTP 404 na każdym kanale, choć logowanie i lista kanałów działały. */
+  function xtreamStreamBase(serverInfo) {
+    var info = serverInfo || {};
+    var host = String(info.url || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    if (!host) return "";
+    var protocol = String(info.server_protocol || "http").toLowerCase();
+    if (protocol !== "http" && protocol !== "https") protocol = "http";
+    var port = String((protocol === "https" ? info.https_port : info.port) || "").trim();
+    if (port && !/:\d{1,5}$/.test(host)) host += ":" + port;
+    return protocol + "://" + host;
   }
 
   /* `extra` to akcja panelu, a `server` pozwala zapytać pod wskazanym adresem —
@@ -2796,7 +2812,7 @@
   /* =============================  XTREAM CODES  ============================= */
 
   function xtreamStreamUrl(profile, stream) {
-    var server = normalizeServer(profile.xtreamServer);
+    var server = profile.xtreamStreamServer || normalizeServer(profile.xtreamServer);
     var user = encodeURIComponent(profile.xtreamUser || "");
     var pass = encodeURIComponent(profile.xtreamPass || "");
     var ext = String(stream.container_extension || "ts").replace(/^\./, "") || "ts";
@@ -2851,6 +2867,15 @@
     saveSettings();
   }
 
+  /* Adres serwera strumieni z server_info trafia do profilu osobno — panel
+     (logowanie, EPG) zostaje tam, gdzie użytkownik go podał, a kanały idą po
+     adres, który naprawdę serwuje strumienie (patrz xtreamStreamBase). */
+  function keepXtreamStreamServer(profile, base) {
+    if (!base || profile.xtreamStreamServer === base) return;
+    profile.xtreamStreamServer = base;
+    saveSettings();
+  }
+
   /* Logowanie do panelu z próbą drugiego schematu. Adres bez schematu to tylko
      domysł (port 443 → https, reszta → http), a panel bywa wystawiony odwrotnie
      — dlatego po błędzie sieci albo odpowiedzi, która nie jest JSON-em,
@@ -2880,6 +2905,8 @@
         throw new Error(t("err_xtream_inactive", { status: userInfo.status }));
       }
       keepXtreamServer(profile, result.server);
+      var streamBase = xtreamStreamBase(result.info && result.info.server_info);
+      if (streamBase) keepXtreamStreamServer(profile, streamBase);
       return result.info;
     });
   }

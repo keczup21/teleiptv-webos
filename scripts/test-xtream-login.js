@@ -103,6 +103,18 @@ check("drugi schemat do proby: host -> https://host",
 check("drugi schemat do proby: https://host:8080 -> http://host:8080",
   base.api.alternateServer("https://host:8080") === "http://host:8080",
   base.api.alternateServer("https://host:8080"));
+check("server_info: strumienie ida po adres z server_info (inny port niz panel)",
+  base.api.xtreamStreamBase({ url: "stream.example.com", port: "8080", server_protocol: "http" }) === "http://stream.example.com:8080",
+  base.api.xtreamStreamBase({ url: "stream.example.com", port: "8080", server_protocol: "http" }));
+check("server_info: https bierze https_port, a nie port http",
+  base.api.xtreamStreamBase({ url: "s.example.com", port: "8080", https_port: "443", server_protocol: "https" }) === "https://s.example.com:443",
+  base.api.xtreamStreamBase({ url: "s.example.com", port: "8080", https_port: "443", server_protocol: "https" }));
+check("server_info: brak pola url -> pusty adres (kanaly zostaja przy adresie panelu)",
+  base.api.xtreamStreamBase({ port: "8080" }) === "",
+  base.api.xtreamStreamBase({ port: "8080" }));
+check("server_info: port wpisany juz w url nie jest dublowany",
+  base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }) === "http://s.example.com:25461",
+  base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }));
 
 const endpoint = base.api.xtreamEndpoint(profile, "", "https://host:443");
 check("adres logowania idzie pod wskazany serwer (probny schemat), nie pod profil",
@@ -146,6 +158,19 @@ function respond(map) {
     h.calls[0].indexOf("https://host:443/player_api.php") === 0, h.calls[0]);
   check("logowanie: udane https zostawia profil z normalnym adresem (bez zapisu)",
     !!result && h.api.profile.xtreamServer === "host:443" && h.saved.length === 0);
+
+  /* 2b. server_info: strumienie stoja pod innym adresem niz panel */
+  h = harness({ server: "host:80", fetch: respond({
+    "http://host:80": {
+      user_info: { auth: 1, status: "Active" },
+      server_info: { url: "stream.example.com", port: "8080", server_protocol: "http" }
+    }
+  }) });
+  result = await h.api.xtreamLogin(h.api.profile);
+  check("logowanie: server_info trafia do profilu (kanaly ida po adres strumieni)",
+    !!result && h.api.profile.xtreamStreamServer === "http://stream.example.com:8080" &&
+    h.saved.length === 1 && h.api.profile.xtreamServer === "host:80",
+    JSON.stringify({ stream: h.api.profile.xtreamStreamServer, panel: h.api.profile.xtreamServer }));
 
   /* 3. pierwszy schemat nie odpowiada -> proba pod drugim i zapamietanie go */
   h = harness({ server: "host:8080", fetch: respond({ "https://host:8080": OK_INFO }) });

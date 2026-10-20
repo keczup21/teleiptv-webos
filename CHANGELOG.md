@@ -24,6 +24,11 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.45] — 2026-10-19
+
+### Poprawiono
+- **Kanały Xtream grają, gdy strumienie stoją pod innym adresem niż panel** — adres kanału bierze się teraz z pola `server_info` (serwer i port strumieni), które panel zwraca przy logowaniu; wcześniej aplikacja budowała go z adresu panelu i każdy kanał kończył się na HTTP 404, choć logowanie i lista kanałów działały.
+
 ## [2.1.44] — 2026-10-19
 
 ### Zmieniono
