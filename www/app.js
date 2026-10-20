@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.45";
+  var APP_VERSION = "2.1.46";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -534,6 +534,7 @@
     diag_error: "błąd", diag_none: "brak",
     diag_probing: "sondowanie…", diag_opened: "panel otwarty",
     diag_server_note: "serwer: {result}",
+    diag_stream_server: "strumienie: {server}",
     diag_auto: "brak obrazu przy grającym dźwięku — panel otwarty sam",
     diag_probe_none: "brak adresu .m3u8 do sprawdzenia",
     diag_probe_failed: "nie udało się pobrać manifestu",
@@ -858,6 +859,7 @@
     diag_error: "error", diag_none: "none",
     diag_probing: "probing…", diag_opened: "panel opened",
     diag_server_note: "server: {result}",
+    diag_stream_server: "streams: {server}",
     diag_auto: "audio playing with no picture — panel opened on its own",
     diag_probe_none: "no .m3u8 address to check",
     diag_probe_failed: "could not fetch the manifest",
@@ -4191,10 +4193,13 @@
 
   /* =============================  ODTWARZANIE  ============================= */
 
-  /* maskuje login i hasło w adresie, żeby komunikat można było bezpiecznie pokazać */
+  /* maskuje host (IP/domenę), login, hasło i id strumienia, żeby komunikat można
+     było bezpiecznie pokazać albo wysłać jako zrzut — zostaje schemat, port
+     i rozszerzenie, które są potrzebne do diagnozy. */
   function maskUrl(url) {
     return String(url || "")
-      .replace(/(\/(?:live|movie|series|timeshift)\/)[^/]+\/[^/]+\//i, "$1****/****/")
+      .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/:]+/i, "$1***")
+      .replace(/(\/(?:live|movie|series|timeshift)\/)[^/]+\/[^/]+\/([^/.?#]+)(\.[^/?#]*)?/i, "$1****/****/***$3")
       .replace(/(username|password)=([^&]*)/gi, "$1=****");
   }
 
@@ -4873,7 +4878,13 @@
   }
 
   function diagServerLines() {
-    return [t("diag_server"), " " + (diagServer || t("diag_probing"))];
+    var lines = [t("diag_server"), " " + (diagServer || t("diag_probing"))];
+    var profile = activeProfile();
+    if (profile && profile.xtreamStreamServer &&
+        profile.xtreamStreamServer !== normalizeServer(profile.xtreamServer)) {
+      lines.push(" " + t("diag_stream_server", { server: maskUrl(profile.xtreamStreamServer) }));
+    }
+    return lines;
   }
 
   function diagManifestLines() {

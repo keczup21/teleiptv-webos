@@ -50,6 +50,7 @@ function slice(from, to) {
 const codeServer = slice("function serverScheme(", "function xtreamEndpoint(");
 const codeEndpoint = slice("function xtreamEndpoint(", "AKTUALIZACJE  ===");
 const codeLogin = slice("var XTREAM_LOGIN_TIMEOUT", "/* krok 1: logowanie");
+const codeMask = slice("function maskUrl(", "function playbackDetails(");
 
 console.log("Xtream: adres serwera, logowanie, podglad hasla i Enter w polach");
 
@@ -115,6 +116,19 @@ check("server_info: brak pola url -> pusty adres (kanaly zostaja przy adresie pa
 check("server_info: port wpisany juz w url nie jest dublowany",
   base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }) === "http://s.example.com:25461",
   base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }));
+
+const maskBox = {};
+vm.createContext(maskBox);
+vm.runInContext(codeMask, maskBox);
+check("maskUrl: host (IP) schowany, zostaje schemat i port",
+  maskBox.maskUrl("http://123.45.67.89:80/live/user/pass/12345.m3u8") === "http://***:80/live/****/****/***.m3u8",
+  maskBox.maskUrl("http://123.45.67.89:80/live/user/pass/12345.m3u8"));
+check("maskUrl: domena, login i haslo schowane",
+  maskBox.maskUrl("https://stream.example.com:8080/live/u/p/9.ts") === "https://***:8080/live/****/****/***.ts",
+  maskBox.maskUrl("https://stream.example.com:8080/live/u/p/9.ts"));
+check("maskUrl: username/password w zapytaniu schowane",
+  maskBox.maskUrl("http://h/x.m3u?username=a&password=b") === "http://***/x.m3u?username=****&password=****",
+  maskBox.maskUrl("http://h/x.m3u?username=a&password=b"));
 
 const endpoint = base.api.xtreamEndpoint(profile, "", "https://host:443");
 check("adres logowania idzie pod wskazany serwer (probny schemat), nie pod profil",

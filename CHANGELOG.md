@@ -24,6 +24,11 @@ i nie odnotowujemy samego podbicia numeru (miejsca z numerem opisuje akapit
 wyżej). Opis wydania na GitHubie powstaje z tego wpisu: `npm run notes`
 (`scripts/release-notes.js`) bierze z changeloga tylko sekcję wydawanej wersji.
 
+## [2.1.46] — 2026-10-20
+
+### Zmieniono
+- **Diagnostyka nie ujawnia adresu serwera** — host (IP/domena), login, hasło i id kanału są zamaskowane (zostaje schemat i port), a sekcja SERWER pokazuje port serwera strumieni, gdy różni się od panelu.
+
 ## [2.1.45] — 2026-10-19
 
 ### Poprawiono
