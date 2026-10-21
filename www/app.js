@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.48";
+  var APP_VERSION = "2.1.49";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -6589,6 +6589,15 @@
     if (tsUrl !== primaryUrl && /\/live\//i.test(primaryUrl.split("#")[0].split("?")[0])) {
       browser.push({ engine: "native", url: tsUrl });
       browser.push({ engine: "mse", url: tsUrl });
+    }
+
+    /* Starszy format Xtream Codes: strumień bez trasy /live/, czyli
+       /<user>/<pass>/<id>.ts. Panel bez obsługi live.php (HTTP 404 na każdym
+       adresie /live/…) wciąż serwuje ten adres — czytnik MSE (mpegts.js)
+       rozbierze surowy TS. */
+    var directUrl = primaryUrl.replace(/\/live\//i, "/").replace(/\.(m3u8|ts)(\?.*)?$/i, ".ts$2");
+    if (directUrl !== primaryUrl && /\/live\//i.test(primaryUrl.split("#")[0].split("?")[0])) {
+      browser.push({ engine: "mse", url: directUrl });
     }
 
     /* Drogi sprzętowe stają na CZELE kolejki — i na kanale na żywo, i w nagraniu
