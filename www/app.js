@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.49";
+  var APP_VERSION = "2.1.50";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -374,7 +374,7 @@
     xtream: "Xtream (login)", playlist_url: "Adres playlisty M3U", pick_m3u_file: "Wybierz plik M3U",
     add_local_file: "dodaj lokalny plik", active_file: "Aktywny plik: {name}",
     xtream_hint: "Dane z panelu Xtream Codes. Podaj sam adres z portem (https — zwykle 443, http — zwykle 80); gdy nie wiesz który, wpisz sam host, aplikacja sprawdzi oba. Kanały, kategorie, EPG i archiwum pobiorą się automatycznie.",
-    xtream_server: "Adres serwera Xtream", username: "Użytkownik", password: "Hasło",
+    xtream_server: "Adres serwera Xtream", xtream_stream_server: "Serwer strumieni (opcjonalny)", username: "Użytkownik", password: "Hasło",
     show_password: "Pokaż", hide_password: "Ukryj",
     epg_url: "EPG XMLTV (opcjonalny — Xtream pobiera go sam)", pick_epg_file: "Wybierz plik EPG",
     use_link: "Użyj linku", add_local_epg: "lub dodaj lokalny plik XMLTV",
@@ -535,7 +535,9 @@
     diag_probing: "sondowanie…", diag_opened: "panel otwarty",
     diag_server_note: "serwer: {result}",
     diag_stream_server: "strumienie: {server}",
+    diag_stream_server_manual: "strumienie (ręcznie): {server}",
     diag_stream_server_panel: "strumienie: adres panelu (server_info nie podał innego adresu)",
+    diag_server_info: "server_info: {info}",
     diag_auto: "brak obrazu przy grającym dźwięku — panel otwarty sam",
     diag_probe_none: "brak adresu .m3u8 do sprawdzenia",
     diag_probe_failed: "nie udało się pobrać manifestu",
@@ -703,7 +705,7 @@
     xtream: "Xtream (login)", playlist_url: "M3U playlist URL", pick_m3u_file: "Choose M3U file",
     add_local_file: "add a local file", active_file: "Active file: {name}",
     xtream_hint: "Xtream Codes panel credentials. Enter just the address with its port (https — usually 443, http — usually 80); if unsure, enter the host alone and the app will try both. Channels, categories, EPG and archive will load automatically.",
-    xtream_server: "Xtream server address", username: "Username", password: "Password",
+    xtream_server: "Xtream server address", xtream_stream_server: "Stream server (optional)", username: "Username", password: "Password",
     show_password: "Show", hide_password: "Hide",
     epg_url: "EPG XMLTV (optional — Xtream loads it automatically)", pick_epg_file: "Choose EPG file",
     use_link: "Use link", add_local_epg: "or add a local XMLTV file",
@@ -861,7 +863,9 @@
     diag_probing: "probing…", diag_opened: "panel opened",
     diag_server_note: "server: {result}",
     diag_stream_server: "streams: {server}",
+    diag_stream_server_manual: "streams (manual): {server}",
     diag_stream_server_panel: "streams: panel address (server_info reported no separate address)",
+    diag_server_info: "server_info: {info}",
     diag_auto: "audio playing with no picture — panel opened on its own",
     diag_probe_none: "no .m3u8 address to check",
     diag_probe_failed: "could not fetch the manifest",
@@ -1471,6 +1475,7 @@
     p.xtreamUser = p.xtreamUser || "";
     p.xtreamPass = p.xtreamPass || "";
     p.xtreamStreamServer = p.xtreamStreamServer || "";
+    p.xtreamStreamServerManual = p.xtreamStreamServerManual || "";
     p.epgUrl = p.epgUrl || "";
     p.epgFileText = p.epgFileText || "";
     p.epgFileName = p.epgFileName || "";
@@ -1863,6 +1868,7 @@
     $("xtreamServer").value = (profile && profile.xtreamServer) || "";
     $("xtreamUser").value = (profile && profile.xtreamUser) || "";
     $("xtreamPass").value = (profile && profile.xtreamPass) || "";
+    $("xtreamStreamServerManual").value = (profile && profile.xtreamStreamServerManual) || "";
     $("epgUrl").value = (profile && profile.epgUrl) || "";
 
     updateSourceSections();
@@ -2055,13 +2061,24 @@
      server_info, gdzie naprawdę stoją strumienie (url, port, https_port,
      server_protocol) — budowanie adresu kanału z adresu panelu kończyło się
      HTTP 404 na każdym kanale, choć logowanie i lista kanałów działały. */
-  function xtreamStreamBase(serverInfo) {
+  /* Surowy server_info z ostatniego logowania — pokazujemy go w diagnostyce,
+     żeby było widać, czy panel w ogóle podał adres/port strumieni. */
+  var lastXtreamServerInfo = null;
+
+  function xtreamStreamBase(serverInfo, panelServer) {
     var info = serverInfo || {};
     var host = String(info.url || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-    if (!host) return "";
     var protocol = String(info.server_protocol || "http").toLowerCase();
     if (protocol !== "http" && protocol !== "https") protocol = "http";
     var port = String((protocol === "https" ? info.https_port : info.port) || "").trim();
+    if (!host) {
+      /* Panel nie podał hosta strumieni (puste url), ale podał port — strumienie
+         zwykle stoją na tym samym hoście, co panel, tylko na innym porcie.
+         Bez portu i hosta nie ma czego zgadywać: zostajemy przy adresie panelu. */
+      if (!panelServer || !port) return "";
+      host = String(panelServer).replace(/^https?:\/\//i, "").replace(/\/+$/, "").replace(/:\d{1,5}$/, "");
+      if (!host) return "";
+    }
     if (port && !/:\d{1,5}$/.test(host)) host += ":" + port;
     return protocol + "://" + host;
   }
@@ -2816,7 +2833,7 @@
   /* =============================  XTREAM CODES  ============================= */
 
   function xtreamStreamUrl(profile, stream) {
-    var server = profile.xtreamStreamServer || normalizeServer(profile.xtreamServer);
+    var server = profile.xtreamStreamServerManual || profile.xtreamStreamServer || normalizeServer(profile.xtreamServer);
     var user = encodeURIComponent(profile.xtreamUser || "");
     var pass = encodeURIComponent(profile.xtreamPass || "");
     var ext = String(stream.container_extension || "ts").replace(/^\./, "") || "ts";
@@ -2909,7 +2926,11 @@
         throw new Error(t("err_xtream_inactive", { status: userInfo.status }));
       }
       keepXtreamServer(profile, result.server);
-      var streamBase = xtreamStreamBase(result.info && result.info.server_info);
+      var rawInfo = result.info && result.info.server_info;
+      lastXtreamServerInfo = rawInfo ? JSON.stringify({
+        url: rawInfo.url, port: rawInfo.port, https_port: rawInfo.https_port, protocol: rawInfo.server_protocol
+      }) : "brak";
+      var streamBase = xtreamStreamBase(rawInfo, result.server);
       if (streamBase) keepXtreamStreamServer(profile, streamBase);
       return result.info;
     });
@@ -4202,6 +4223,7 @@
     return String(url || "")
       .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/:]+/i, "$1***")
       .replace(/(\/(?:live|movie|series|timeshift)\/)[^/]+\/[^/]+\/([^/.?#]+)(\.[^/?#]*)?/i, "$1****/****/***$3")
+      .replace(/(:\/\/[^/]+)\/(?!live\/|movie\/|series\/|timeshift\/)([^/]+)\/([^/]+)\/([^/.?#]+)(\.[^/?#]*)?/i, "$1/****/****/***$5")
       .replace(/(username|password)=([^&]*)/gi, "$1=****");
   }
 
@@ -4883,11 +4905,16 @@
     var lines = [t("diag_server"), " " + (diagServer || t("diag_probing"))];
     var profile = activeProfile();
     if (profile && profile.sourceType === "xtream") {
-      if (profile.xtreamStreamServer &&
+      if (profile.xtreamStreamServerManual) {
+        lines.push(" " + t("diag_stream_server_manual", { server: maskUrl(profile.xtreamStreamServerManual) }));
+      } else if (profile.xtreamStreamServer &&
           profile.xtreamStreamServer !== normalizeServer(profile.xtreamServer)) {
         lines.push(" " + t("diag_stream_server", { server: maskUrl(profile.xtreamStreamServer) }));
       } else {
         lines.push(" " + t("diag_stream_server_panel"));
+      }
+      if (lastXtreamServerInfo) {
+        lines.push(" " + t("diag_server_info", { info: lastXtreamServerInfo }));
       }
     }
     return lines;
@@ -10806,6 +10833,7 @@
       xtreamServer: normalizeServer($("xtreamServer").value),
       xtreamUser: $("xtreamUser").value.trim(),
       xtreamPass: $("xtreamPass").value,
+      xtreamStreamServerManual: normalizeServer($("xtreamStreamServerManual").value),
       epgUrl: $("epgUrl").value.trim(),
       epgFileText: draft.epgText,
       epgFileName: draft.epgName

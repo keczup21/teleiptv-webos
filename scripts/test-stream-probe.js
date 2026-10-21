@@ -327,7 +327,7 @@ function tick() {
 
   const plPart = src.slice(src.indexOf("var I18N_PL"), src.indexOf("var I18N_EN"));
   const enPart = src.slice(src.indexOf("var I18N_EN"), src.indexOf("var I18N = {"));
-  ["err_probe_ok", "err_probe_http", "err_probe_net", "diag_server", "diag_server_note", "diag_stream_server", "diag_stream_server_panel"].forEach(function (key) {
+  ["err_probe_ok", "err_probe_http", "err_probe_net", "diag_server", "diag_server_note", "diag_stream_server", "diag_stream_server_manual", "diag_stream_server_panel", "diag_server_info"].forEach(function (key) {
     check("app.js: napis " + key + " jest po polsku i po angielsku",
       plPart.indexOf(key + ":") > 0 && enPart.indexOf(key + ":") > 0);
   });

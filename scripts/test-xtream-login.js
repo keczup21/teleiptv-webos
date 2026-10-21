@@ -113,6 +113,15 @@ check("server_info: https bierze https_port, a nie port http",
 check("server_info: brak pola url -> pusty adres (kanaly zostaja przy adresie panelu)",
   base.api.xtreamStreamBase({ port: "8080" }) === "",
   base.api.xtreamStreamBase({ port: "8080" }));
+check("server_info: brak url, ale port + adres panelu -> host panelu na porcie strumieni",
+  base.api.xtreamStreamBase({ port: "8080" }, "http://host:80") === "http://host:8080",
+  base.api.xtreamStreamBase({ port: "8080" }, "http://host:80"));
+check("server_info: brak url i brak portu -> nadal pusty adres (kanaly przy adresie panelu)",
+  base.api.xtreamStreamBase({}, "http://host:80") === "",
+  base.api.xtreamStreamBase({}, "http://host:80"));
+check("server_info: brak url, protokol https i https_port -> host panelu na https_port",
+  base.api.xtreamStreamBase({ https_port: "8443", server_protocol: "https" }, "http://host:80") === "https://host:8443",
+  base.api.xtreamStreamBase({ https_port: "8443", server_protocol: "https" }, "http://host:80"));
 check("server_info: port wpisany juz w url nie jest dublowany",
   base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }) === "http://s.example.com:25461",
   base.api.xtreamStreamBase({ url: "s.example.com:25461", port: "25461", server_protocol: "http" }));
@@ -129,6 +138,9 @@ check("maskUrl: domena, login i haslo schowane",
 check("maskUrl: username/password w zapytaniu schowane",
   maskBox.maskUrl("http://h/x.m3u?username=a&password=b") === "http://***/x.m3u?username=****&password=****",
   maskBox.maskUrl("http://h/x.m3u?username=a&password=b"));
+check("maskUrl: stary format Xtream bez /live/ tez chowa login i haslo",
+  maskBox.maskUrl("https://host:443/user/pass/494.ts") === "https://***:443/****/****/***.ts",
+  maskBox.maskUrl("https://host:443/user/pass/494.ts"));
 
 const endpoint = base.api.xtreamEndpoint(profile, "", "https://host:443");
 check("adres logowania idzie pod wskazany serwer (probny schemat), nie pod profil",
@@ -283,7 +295,7 @@ function respond(map) {
 
   const plPart = src.slice(src.indexOf("var I18N_PL"), src.indexOf("var I18N_EN"));
   const enPart = src.slice(src.indexOf("var I18N_EN"), src.indexOf("var I18N = {"));
-  ["show_password", "hide_password", "err_xtream_unreachable"].forEach(function (key) {
+  ["show_password", "hide_password", "err_xtream_unreachable", "xtream_stream_server"].forEach(function (key) {
     check("app.js: napis " + key + " jest po polsku i po angielsku",
       plPart.indexOf(key + ":") > 0 && enPart.indexOf(key + ":") > 0);
   });
