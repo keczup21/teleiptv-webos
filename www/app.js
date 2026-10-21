@@ -25,7 +25,7 @@
      był natychmiastowy i nie przepisywał za każdym razem megabajtów danych. */
   var BLOBS_KEY = "openiptvBlobs";
   var BLOB_FIELDS = ["playlistFileText", "epgFileText", "playlistFileName", "epgFileName"];
-  var APP_VERSION = "2.1.47";
+  var APP_VERSION = "2.1.48";
   var SCHEMA_VERSION = 5;
 
   /* „Ostatnio oglądane”: kanał trafia na listę po 10 s oglądania,
@@ -535,6 +535,7 @@
     diag_probing: "sondowanie…", diag_opened: "panel otwarty",
     diag_server_note: "serwer: {result}",
     diag_stream_server: "strumienie: {server}",
+    diag_stream_server_panel: "strumienie: adres panelu (server_info nie podał innego adresu)",
     diag_auto: "brak obrazu przy grającym dźwięku — panel otwarty sam",
     diag_probe_none: "brak adresu .m3u8 do sprawdzenia",
     diag_probe_failed: "nie udało się pobrać manifestu",
@@ -860,6 +861,7 @@
     diag_probing: "probing…", diag_opened: "panel opened",
     diag_server_note: "server: {result}",
     diag_stream_server: "streams: {server}",
+    diag_stream_server_panel: "streams: panel address (server_info reported no separate address)",
     diag_auto: "audio playing with no picture — panel opened on its own",
     diag_probe_none: "no .m3u8 address to check",
     diag_probe_failed: "could not fetch the manifest",
@@ -4556,7 +4558,7 @@
      Treść jest do zdjęcia telefonem: w telewizorze nie ma schowka ani pliku,
      do którego można by zajrzeć. */
 
-  var DIAG_LOG_MAX = 14;           /* ile ostatnich zdarzeń <video> pamiętamy */
+  var DIAG_LOG_MAX = 200;          /* ile zdarzeń trzymamy w dzienniku — cała historia błędu ma być widoczna */
   var DIAG_PROBE_TIMEOUT = 8000;   /* ile czekamy na manifest HLS */
 
   var diagEvents = [];         /* { at: ms, label: „…” } — najnowsze na końcu */
@@ -4880,9 +4882,13 @@
   function diagServerLines() {
     var lines = [t("diag_server"), " " + (diagServer || t("diag_probing"))];
     var profile = activeProfile();
-    if (profile && profile.xtreamStreamServer &&
-        profile.xtreamStreamServer !== normalizeServer(profile.xtreamServer)) {
-      lines.push(" " + t("diag_stream_server", { server: maskUrl(profile.xtreamStreamServer) }));
+    if (profile && profile.sourceType === "xtream") {
+      if (profile.xtreamStreamServer &&
+          profile.xtreamStreamServer !== normalizeServer(profile.xtreamServer)) {
+        lines.push(" " + t("diag_stream_server", { server: maskUrl(profile.xtreamStreamServer) }));
+      } else {
+        lines.push(" " + t("diag_stream_server_panel"));
+      }
     }
     return lines;
   }
